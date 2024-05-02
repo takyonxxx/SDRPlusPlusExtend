@@ -178,6 +178,7 @@ public:
             config.conf["devices"][serial]["sampleRate"] = 20000000;
             config.conf["devices"][serial]["biasT"] = false;
             config.conf["devices"][serial]["amp"] = false;
+            config.conf["devices"][serial]["ptt"] = false;
             config.conf["devices"][serial]["lnaGain"] = 0;
             config.conf["devices"][serial]["vgaGain"] = 0;
             config.conf["devices"][serial]["bandwidth"] = 16;
@@ -189,6 +190,7 @@ public:
         sampleRate = 20000000;
         biasT = false;
         amp = false;
+        ptt = false;
         lna = 0;
         vga = 0;
         bwId = 16;
@@ -208,6 +210,9 @@ public:
         }
         if (config.conf["devices"][serial].contains("amp")) {
             amp = config.conf["devices"][serial]["amp"];
+        }
+        if (config.conf["devices"][serial].contains("ptt")) {
+            ptt = config.conf["devices"][serial]["ptt"];
         }
         if (config.conf["devices"][serial].contains("lnaGain")) {
             lna = config.conf["devices"][serial]["lnaGain"];
@@ -267,7 +272,10 @@ private:
         hackrf_set_lna_gain(_this->openDev, _this->lna);
         hackrf_set_vga_gain(_this->openDev, _this->vga);
 
-        hackrf_start_rx(_this->openDev, callback, _this);
+        if(_this->ptt)
+            hackrf_start_tx(_this->openDev, callback_tx, _this);
+        else
+            hackrf_start_rx(_this->openDev, callback_rx, _this);
 
         _this->running = true;
         flog::info("HackRFSourceModule '{0}': Start!", _this->name);
@@ -278,7 +286,12 @@ private:
         if (!_this->running) { return; }
         _this->running = false;
         _this->stream.stopWriter();
-        // TODO: Stream stop
+
+        if(_this->ptt)
+            hackrf_stop_tx(_this->openDev);
+        else
+            hackrf_stop_rx(_this->openDev);
+
         hackrf_error err = (hackrf_error)hackrf_close(_this->openDev);
         if (err != HACKRF_SUCCESS) {
             flog::error("Could not close HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
@@ -379,6 +392,19 @@ private:
             config.release(true);
         }
 
+        if (SmGui::Checkbox(CONCAT("Ptt Enabled - Tx Mode##_hackrf_ptt_", _this->name), &_this->ptt)) {
+
+            if (_this->running) {
+                _this->stop(ctx);
+            }
+
+            _this->start(ctx);
+
+            config.acquire();
+            config.conf["devices"][_this->selectedSerial]["ptt"] = _this->ptt;
+            config.release(true);
+        }
+
         if (SmGui::Checkbox(CONCAT("Bias-T##_hackrf_bt_", _this->name), &_this->biasT)) {
             if (_this->running) {
                 hackrf_set_antenna_enable(_this->openDev, _this->biasT);
@@ -398,8 +424,16 @@ private:
         }
     }
 
-    static int callback(hackrf_transfer* transfer) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->rx_ctx;
+    static int callback_rx(hackrf_transfer* transfer) {
+        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->rx_ctx;      
+        volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
+        if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
+        return 0;
+    }
+
+    static int callback_tx(hackrf_transfer* transfer) {
+        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
+        // flog::info("HackRFSourceModule '{0}': Tx Bytes: {1}!", _this->name, transfer->valid_length);
         volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
         if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
         return 0;
@@ -419,6 +453,7 @@ private:
     int bwId = 16;
     bool biasT = false;
     bool amp = false;
+    bool ptt = false;
     float lna = 0;
     float vga = 0;
 

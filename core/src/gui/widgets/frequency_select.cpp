@@ -106,7 +106,7 @@ void FrequencySelect::draw() {
     // Given RGBA values
     uint8_t red = 0;
     uint8_t green = 200;
-    uint8_t blue = 255;
+    uint8_t blue = 200;
     float alpha_float = 0.8;
 
     // Convert alpha from float (0.0 - 1.0) to an 8-bit integer (0 - 255)
