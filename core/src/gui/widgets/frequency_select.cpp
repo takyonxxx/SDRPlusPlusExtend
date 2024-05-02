@@ -103,8 +103,24 @@ void FrequencySelect::draw() {
         onPosChange();
     }
 
+    // Given RGBA values
+    uint8_t red = 223;
+    uint8_t green = 210;
+    uint8_t blue = 43;
+    float alpha_float = 0.8;
+
+    // Convert alpha from float (0.0 - 1.0) to an 8-bit integer (0 - 255)
+    uint8_t alpha = static_cast<uint8_t>(alpha_float * 255);
+
+    // Combine the RGBA components into a single 32-bit unsigned integer (u32)
+    uint32_t rgba_u32 = (static_cast<uint32_t>(alpha) << 24) | // Shift alpha to the highest 8 bits
+                        (static_cast<uint32_t>(red) << 16) |  // Shift red to the next highest 8 bits
+                        (static_cast<uint32_t>(green) << 8) | // Shift green to the next highest 8 bits
+                        static_cast<uint32_t>(blue);          // Blue remains in the lowest 8 bits
+
+
     ImU32 disabledColor = ImGui::GetColorU32(ImGuiCol_Text, 0.3f);
-    ImU32 textColor = ImGui::GetColorU32(ImGuiCol_Text);
+    ImU32 textColor = static_cast<ImU32>(rgba_u32); //ImGui::GetColorU32(ImGuiCol_Text, 0.8f);
 
     
     int digitWidth = digitSz.x;

@@ -175,7 +175,7 @@ public:
         bool created = false;
         config.acquire();
         if (!config.conf["devices"].contains(serial)) {
-            config.conf["devices"][serial]["sampleRate"] = 2000000;
+            config.conf["devices"][serial]["sampleRate"] = 20000000;
             config.conf["devices"][serial]["biasT"] = false;
             config.conf["devices"][serial]["amp"] = false;
             config.conf["devices"][serial]["lnaGain"] = 0;
@@ -186,7 +186,7 @@ public:
 
         // Set default values
         srId = 0;
-        sampleRate = 2000000;
+        sampleRate = 20000000;
         biasT = false;
         amp = false;
         lna = 0;
@@ -293,7 +293,25 @@ private:
             hackrf_set_freq(_this->openDev, freq);
         }
         _this->freq = freq;
-        flog::info("HackRFSourceModule '{0}': Tune: {1}!", _this->name, freq);
+
+        int64_t display_freq;
+        std::string unit;
+
+        if (freq < 1e3) {
+            display_freq = static_cast<int64_t>(freq);
+            unit = "Hz";
+        } else if (freq < 1e6) {
+            display_freq = static_cast<int64_t>(freq / 1e3);
+            unit = "kHz";
+        } else if (freq < 1e9) {
+            display_freq = static_cast<int64_t>(freq / 1e6);
+            unit = "MHz";
+        } else {
+            display_freq = static_cast<int64_t>(freq / 1e9);
+            unit = "GHz";
+        }
+
+        flog::info("HackRFSourceModule '{0}': Tune: {1} {2}!", _this->name, display_freq, unit);
     }
 
     static void menuHandler(void* ctx) {

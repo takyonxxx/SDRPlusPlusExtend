@@ -81,14 +81,14 @@ void MainWindow::init() {
     gui::freqSelect.init();
 
     // Set default values for waterfall in case no source init's it
-    gui::waterfall.setBandwidth(8000000);
-    gui::waterfall.setViewBandwidth(8000000);
+    gui::waterfall.setBandwidth(20000000);
+    gui::waterfall.setViewBandwidth(20000000);
 
     fft_in = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * fftSize);
     fft_out = (fftwf_complex*)fftwf_malloc(sizeof(fftwf_complex) * fftSize);
     fftwPlan = fftwf_plan_dft_1d(fftSize, fft_in, fft_out, FFTW_FORWARD, FFTW_ESTIMATE);
 
-    sigpath::iqFrontEnd.init(&dummyStream, 8000000, true, 1, false, 1024, 20.0, IQFrontEnd::FFTWindow::NUTTALL, acquireFFTBuffer, releaseFFTBuffer, this);
+    sigpath::iqFrontEnd.init(&dummyStream, 20000000, true, 1, false, 1024, 20.0, IQFrontEnd::FFTWindow::NUTTALL, acquireFFTBuffer, releaseFFTBuffer, this);
     sigpath::iqFrontEnd.start();
 
     vfoCreatedHandler.handler = vfoAddedHandler;
