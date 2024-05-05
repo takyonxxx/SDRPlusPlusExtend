@@ -1,5 +1,6 @@
 #include <utils/flog.h>
 #include <module.h>
+#include <math.h>
 #include <gui/gui.h>
 #include <signal_path/signal_path.h>
 #include <core.h>
@@ -175,25 +176,31 @@ public:
         bool created = false;
         config.acquire();
         if (!config.conf["devices"].contains(serial)) {
-            config.conf["devices"][serial]["sampleRate"] = 20000000;
+            config.conf["devices"][serial]["sampleRate"] = 2000000;
             config.conf["devices"][serial]["biasT"] = false;
             config.conf["devices"][serial]["amp"] = false;
             config.conf["devices"][serial]["ptt"] = false;
-            config.conf["devices"][serial]["lnaGain"] = 0;
-            config.conf["devices"][serial]["vgaGain"] = 0;
+            config.conf["devices"][serial]["lnaGain"] = 40;
+            config.conf["devices"][serial]["vgaGain"] = 40;
+            config.conf["devices"][serial]["txVgaGain"] = 47;
+            config.conf["devices"][serial]["txAudioAmp"] = 1.5;
             config.conf["devices"][serial]["bandwidth"] = 16;
+            config.conf["devices"][serial]["audioFrequency"] = 440.0;
         }
         config.release(created);
 
         // Set default values
         srId = 0;
-        sampleRate = 20000000;
+        sampleRate = 2000000;
         biasT = false;
         amp = false;
         ptt = false;
         lna = 0;
         vga = 0;
-        bwId = 16;
+        tx_vga = 0;
+        amplitudeScalingFactor = 1.5;
+        bwId = 1;
+        audioFrequency = 440.0;
 
         // Load from config if available and validate
         if (config.conf["devices"][serial].contains("sampleRate")) {
@@ -220,9 +227,18 @@ public:
         if (config.conf["devices"][serial].contains("vgaGain")) {
             vga = config.conf["devices"][serial]["vgaGain"];
         }
+        if (config.conf["devices"][serial].contains("txVgaGain")) {
+            tx_vga = config.conf["devices"][serial]["txVgaGain"];
+        }
+        if (config.conf["devices"][serial].contains("txAudioAmp")) {
+            amplitudeScalingFactor = config.conf["devices"][serial]["txAudioAmp"];
+        }
         if (config.conf["devices"][serial].contains("bandwidth")) {
             bwId = config.conf["devices"][serial]["bandwidth"];
             bwId = std::clamp<int>(bwId, 0, 16);
+        }
+        if (config.conf["devices"][serial].contains("audioFrequency")) {
+            audioFrequency = config.conf["devices"][serial]["audioFrequency"];
         }
 
         selectedSerial = serial;
@@ -263,14 +279,27 @@ private:
             return;
         }
 
+        _this->current_tx_sample = 0;
+        if(_this->ptt)
+        {
+            _this->amp = true;
+            _this->biasT = true;
+        }
+        else
+        {
+            _this->amp = false;
+            _this->biasT = false;
+        }
+
         hackrf_set_sample_rate(_this->openDev, _this->sampleRate);
+
         hackrf_set_baseband_filter_bandwidth(_this->openDev, _this->bandwidthIdToBw(_this->bwId));
         hackrf_set_freq(_this->openDev, _this->freq);
-
         hackrf_set_antenna_enable(_this->openDev, _this->biasT);
         hackrf_set_amp_enable(_this->openDev, _this->amp);
         hackrf_set_lna_gain(_this->openDev, _this->lna);
         hackrf_set_vga_gain(_this->openDev, _this->vga);
+        hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
 
         if(_this->ptt)
             hackrf_start_tx(_this->openDev, callback_tx, _this);
@@ -278,7 +307,7 @@ private:
             hackrf_start_rx(_this->openDev, callback_rx, _this);
 
         _this->running = true;
-        flog::info("HackRFSourceModule '{0}': Start!", _this->name);
+        flog::info("HackRFSourceModule '{0} {1}': Start!", _this->name, _this->ptt);
     }
 
     static void stop(void* ctx) {
@@ -372,7 +401,7 @@ private:
 
         SmGui::LeftLabel("LNA Gain");
         SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_lna_", _this->name), &_this->lna, 0, 40, 8, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_lna_", _this->name), &_this->lna, 0, 40, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
             if (_this->running) {
                 hackrf_set_lna_gain(_this->openDev, _this->lna);
             }
@@ -383,12 +412,40 @@ private:
 
         SmGui::LeftLabel("VGA Gain");
         SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_vga_", _this->name), &_this->vga, 0, 62, 2, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_vga_", _this->name), &_this->vga, 0, 62, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
             if (_this->running) {
                 hackrf_set_vga_gain(_this->openDev, _this->vga);
             }
             config.acquire();
             config.conf["devices"][_this->selectedSerial]["vgaGain"] = (int)_this->vga;
+            config.release(true);
+        }      
+
+        SmGui::LeftLabel("Tx VGA Gain");
+        SmGui::FillWidth();
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_vga_", _this->name), &_this->tx_vga, 0, 47, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
+            if (_this->running) {
+                hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
+            }
+            config.acquire();
+            config.conf["devices"][_this->selectedSerial]["txVgaGain"] = (int)_this->tx_vga;
+            config.release(true);
+        }
+
+        SmGui::LeftLabel("Tx Audio Frequency");
+        SmGui::FillWidth();
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_audio_freq", _this->name), &_this->audioFrequency, 200, 2000, 10, SmGui::FMT_STR_FLOAT_NO_DECIMAL)) {
+            config.acquire();
+            config.conf["devices"][_this->selectedSerial]["audioFrequency"] = (int)_this->audioFrequency;
+            config.release(true);
+        }
+
+
+        SmGui::LeftLabel("Tx Audio Amplitute");
+        SmGui::FillWidth();
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_audio_amp_", _this->name), &_this->amplitudeScalingFactor, 1.0, 3, 0.1, SmGui::FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
+            config.acquire();
+            config.conf["devices"][_this->selectedSerial]["txAudioAmp"] = (int)_this->amplitudeScalingFactor;
             config.release(true);
         }
 
@@ -433,9 +490,33 @@ private:
 
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        // flog::info("HackRFSourceModule '{0}': Tx Bytes: {1}!", _this->name, transfer->valid_length);
-        volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
-        if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
+
+        // auto modulationIndex = 0.5; // Adjust this value as needed for NFM
+        auto modulationIndex = 5.0; // Adjust this value as needed for WFM
+
+        // Generate the signal to transmit
+        for (int sampleIndex = 0; sampleIndex < transfer->valid_length / 2; sampleIndex++) {
+            // Calculate time in seconds
+            double time = (_this->current_tx_sample + sampleIndex) / static_cast<double>(_this->sampleRate);
+            double audioSignal = sin(2 * M_PI * _this->audioFrequency * time);
+
+            double modulatedPhase = 2 * M_PI * _this->freq * time + modulationIndex * audioSignal;
+
+            // Calculate the in-phase (I) and quadrature (Q) components based on the modulated phase
+            double inPhaseComponent = cos(modulatedPhase) * _this->amplitudeScalingFactor;
+            double quadratureComponent = sin(modulatedPhase) * _this->amplitudeScalingFactor;
+
+            // Calculate the buffer index
+            int bufferIndex = sampleIndex * 2;
+
+            // Pack the I/Q samples into the transfer buffer
+            transfer->buffer[bufferIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
+            transfer->buffer[bufferIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
+        }
+
+        // Update the current sample index to keep track of samples processed
+        _this->current_tx_sample += transfer->valid_length / 2;
+
         return 0;
     }
 
@@ -456,6 +537,10 @@ private:
     bool ptt = false;
     float lna = 0;
     float vga = 0;
+    float tx_vga = 0;
+    float amplitudeScalingFactor = 1.5;
+    float audioFrequency = 440.0;
+    int current_tx_sample = 0;
 
 #ifdef __ANDROID__
     int devFd = -1;
