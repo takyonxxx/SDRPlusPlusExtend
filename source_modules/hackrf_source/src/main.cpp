@@ -9,6 +9,7 @@
 #include <gui/widgets/stepped_slider.h>
 #include <gui/smgui.h>
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include <portaudio.h>
 
@@ -33,8 +34,6 @@ ConfigManager config;
 
 const char* AGG_MODES_STR = "Off\0Low\0High\0";
 const char* sampleRatesTxt = "20MHz\00016MHz\00010MHz\0008MHz\0005MHz\0004MHz\0002MHz\000";
-std::vector<float> micBuffer;
-std::thread micThread;
 const int AUDIO_SAMPLE_RATE = 44100;
 const unsigned long AUDIO_FRAMES_PER_BUFFER = 256;
 
@@ -86,55 +85,6 @@ const char* bandwidthsTxt = "1.75MHz\0"
                             "24MHz\0"
                             "28MHz\0"
                             "Auto\0";
-
-static void captureMicrophoneInput() {
-    // Initialize PortAudio
-    PaError err = Pa_Initialize();
-    if (err != paNoError) {
-        std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
-        return;
-    }
-
-    // Open a PortAudio stream for microphone input
-    PaStream* stream;
-    err = Pa_OpenDefaultStream(&stream, 1, 0, paFloat32, AUDIO_SAMPLE_RATE, AUDIO_FRAMES_PER_BUFFER, nullptr, &micBuffer);
-    if (err != paNoError) {
-        std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
-        Pa_Terminate();
-        return;
-    }
-
-    // Start the PortAudio stream
-    err = Pa_StartStream(stream);
-    if (err != paNoError) {
-        std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
-        Pa_CloseStream(stream);
-        Pa_Terminate();
-        return;
-    }
-
-    // Wait indefinitely to capture microphone input
-    while (true) {
-        // Sleep for a short duration to avoid busy-waiting
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-
-    // Stop and close the PortAudio stream
-    err = Pa_StopStream(stream);
-    if (err != paNoError) {
-        std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
-    }
-    err = Pa_CloseStream(stream);
-    if (err != paNoError) {
-        std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
-    }
-
-    // Terminate PortAudio
-    err = Pa_Terminate();
-    if (err != paNoError) {
-        std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
-    }
-}
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:
@@ -360,7 +310,6 @@ private:
 
         if(_this->ptt)
         {
-            micThread = std::thread(captureMicrophoneInput);
             hackrf_start_tx(_this->openDev, callback_tx, _this);
         }
         else
@@ -373,14 +322,12 @@ private:
     static void stop(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
         if (!_this->running) { return; }
+
         _this->running = false;
         _this->stream.stopWriter();
 
         if(_this->ptt)
         {
-            if (micThread.joinable()) {
-                micThread.join();
-            }
             hackrf_stop_tx(_this->openDev);
         }
         else
@@ -401,24 +348,31 @@ private:
         }
         _this->freq = freq;
 
-        int64_t display_freq;
+        double display_freq; // Change to double for decimal precision
         std::string unit;
 
         if (freq < 1e3) {
-            display_freq = static_cast<int64_t>(freq);
+            display_freq = freq;
             unit = "Hz";
         } else if (freq < 1e6) {
-            display_freq = static_cast<int64_t>(freq / 1e3);
+            display_freq = freq / 1e3;
             unit = "kHz";
         } else if (freq < 1e9) {
-            display_freq = static_cast<int64_t>(freq / 1e6);
+            display_freq = freq / 1e6;
             unit = "MHz";
         } else {
-            display_freq = static_cast<int64_t>(freq / 1e9);
+            display_freq = freq / 1e9;
             unit = "GHz";
         }
 
-        flog::info("HackRFSourceModule '{0}': Tune: {1} {2}!", _this->name, display_freq, unit);
+        std::stringstream stream;
+        stream << std::fixed << std::setprecision(1) << display_freq; // Set precision for one decimal place
+        std::string display_freq_str = stream.str();
+
+        // Append unit
+        display_freq_str += " " + unit;
+
+        flog::info("HackRFSourceModule '{0}': Tune: {1}!", _this->name, display_freq_str);
     }
 
     static void menuHandler(void* ctx) {
@@ -553,9 +507,9 @@ private:
         return 0;
     }
 
-    static int callback_tx(hackrf_transfer* transfer) {
+    static int send_audio_mic_tx(hackrf_transfer* transfer, std::vector<float> micBuffer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-
+        // auto modulationIndex = 0.5; // Adjust this value as needed for NFM
         auto modulationIndex = 5.0; // Adjust this value as needed for WFM
 
         // Check if micBuffer is populated with microphone input
@@ -563,7 +517,6 @@ private:
             std::cerr << "Error: micBuffer is empty. Capture microphone input first." << std::endl;
             return -1;
         }
-
         // Calculate the number of samples to process
         int numSamples = transfer->valid_length / 2;
 
@@ -587,11 +540,43 @@ private:
             transfer->buffer[bufferIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
             transfer->buffer[bufferIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
         }
+        _this->current_tx_sample += numSamples;
+        return 0;
+    }
+
+    static int send_sin_wave_tx(hackrf_transfer* transfer) {
+        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
+        // auto modulationIndex = 0.5; // Adjust this value as needed for NFM
+        auto modulationIndex = 5.0; // Adjust this value as needed for WFM
+
+        // Generate the signal to transmit
+        for (int sampleIndex = 0; sampleIndex < transfer->valid_length / 2; sampleIndex++) {
+            // Calculate time in seconds
+            double time = (_this->current_tx_sample + sampleIndex) / static_cast<double>(_this->sampleRate);
+            double audioSignal = sin(2 * M_PI * _this->audioFrequency * time);
+
+            double modulatedPhase = 2 * M_PI * _this->freq * time + modulationIndex * audioSignal;
+
+            // Calculate the in-phase (I) and quadrature (Q) components based on the modulated phase
+            double inPhaseComponent = cos(modulatedPhase) * _this->amplitudeScalingFactor;
+            double quadratureComponent = sin(modulatedPhase) * _this->amplitudeScalingFactor;
+
+            // Calculate the buffer index
+            int bufferIndex = sampleIndex * 2;
+
+            // Pack the I/Q samples into the transfer buffer
+            transfer->buffer[bufferIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
+            transfer->buffer[bufferIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
+        }
 
         // Update the current sample index to keep track of samples processed
-        _this->current_tx_sample += numSamples;
+        _this->current_tx_sample += transfer->valid_length / 2;
+        return 0;
+    }
 
-//        // auto modulationIndex = 0.5; // Adjust this value as needed for NFM
+    static int callback_tx(hackrf_transfer* transfer) {
+        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
+        _this->send_sin_wave_tx(transfer);
 //        auto modulationIndex = 5.0; // Adjust this value as needed for WFM
 
 //        // Generate the signal to transmit
@@ -616,7 +601,6 @@ private:
 
 //        // Update the current sample index to keep track of samples processed
 //        _this->current_tx_sample += transfer->valid_length / 2;
-
         return 0;
     }
 
