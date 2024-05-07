@@ -8,8 +8,11 @@ include(${SDRPP_MODULE_CMAKE})
 if (MSVC)
     # Lib path
     target_link_directories(hackrf_source PRIVATE "C:/Program Files/PothosSDR/bin/")
-
     target_link_libraries(hackrf_source PRIVATE hackrf)
+
+    find_package(portaudio CONFIG REQUIRED)
+    target_link_libraries(hackrf_source PRIVATE portaudio)
+
 elseif (ANDROID)
     target_include_directories(hackrf_source PUBLIC
         /sdr-kit/${ANDROID_ABI}/include/libhackrf
@@ -23,8 +26,12 @@ else (MSVC)
     find_package(PkgConfig)
 
     pkg_check_modules(LIBHACKRF REQUIRED libhackrf)
-
     target_include_directories(hackrf_source PRIVATE ${LIBHACKRF_INCLUDE_DIRS})
     target_link_directories(hackrf_source PRIVATE ${LIBHACKRF_LIBRARY_DIRS})
     target_link_libraries(hackrf_source PRIVATE ${LIBHACKRF_LIBRARIES})
+
+    pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
+    target_include_directories(hackrf_source PRIVATE ${PORTAUDIO_INCLUDE_DIRS})
+    target_link_directories(hackrf_source PRIVATE ${PORTAUDIO_LIBRARY_DIRS})
+    target_link_libraries(hackrf_source PRIVATE ${PORTAUDIO_LIBRARIES})
 endif ()
