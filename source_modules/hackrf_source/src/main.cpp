@@ -11,6 +11,7 @@
 #include <iostream>
 #include <iomanip>
 #include <vector>
+#include <mutex>
 #include <portaudio.h>
 
 #ifndef __ANDROID__
@@ -112,11 +113,14 @@ public:
         std::string confSerial = config.conf["device"];
         config.release();
         selectBySerial(confSerial);
+        initializePaStream();
 
         sigpath::sourceManager.registerSource("HackRF", &handler);
+
     }
 
     ~HackRFSourceModule() {
+        closePaStream();
         stop(this);
         hackrf_exit();
         sigpath::sourceManager.unregisterSource("HackRF");
@@ -315,7 +319,7 @@ private:
         else
             hackrf_start_rx(_this->openDev, callback_rx, _this);
 
-        _this->running = true;
+        _this->running = true;        
         flog::info("HackRFSourceModule '{0} {1}': Start!", _this->name, _this->ptt);
     }
 
@@ -505,44 +509,7 @@ private:
         volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
         if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
         return 0;
-    }
-
-    static int send_audio_mic_tx(hackrf_transfer* transfer, std::vector<float> micBuffer) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        // auto modulationIndex = 0.5; // Adjust this value as needed for NFM
-        auto modulationIndex = 5.0; // Adjust this value as needed for WFM
-
-        // Check if micBuffer is populated with microphone input
-        if (micBuffer.empty()) {
-            std::cerr << "Error: micBuffer is empty. Capture microphone input first." << std::endl;
-            return -1;
-        }
-        // Calculate the number of samples to process
-        int numSamples = transfer->valid_length / 2;
-
-        for (int sampleIndex = 0; sampleIndex < numSamples; sampleIndex++) {
-            // Calculate time in seconds
-            double time = (_this->current_tx_sample + sampleIndex) / static_cast<double>(_this->sampleRate);
-
-            // Get microphone data from micBuffer
-            double micSample = micBuffer[(sampleIndex % micBuffer.size())];
-
-            double modulatedPhase = 2 * M_PI * _this->freq * time + modulationIndex * micSample;
-
-            // Calculate the in-phase (I) and quadrature (Q) components based on the modulated phase
-            double inPhaseComponent = cos(modulatedPhase) * _this->amplitudeScalingFactor;
-            double quadratureComponent = sin(modulatedPhase) * _this->amplitudeScalingFactor;
-
-            // Calculate the buffer index
-            int bufferIndex = sampleIndex * 2;
-
-            // Pack the I/Q samples into the transfer buffer
-            transfer->buffer[bufferIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
-            transfer->buffer[bufferIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
-        }
-        _this->current_tx_sample += numSamples;
-        return 0;
-    }
+    }    
 
     static int send_sin_wave_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
@@ -574,10 +541,112 @@ private:
         return 0;
     }
 
+    const double filter_cutoff_freq = 75e3;
+    const double modulation_index = 5.0;
+    static int send_audio_mic_tx(hackrf_transfer* transfer) {
+        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
+        auto filter_alpha = 1 - exp(-2 * M_PI * _this->filter_cutoff_freq / _this->sampleRate);
+
+        std::lock_guard<std::mutex> lock(_this->micBufferMutex);
+
+        if (_this->micBuffer.empty()) {
+            std::cerr << "Error: micBuffer is empty. Capture microphone input first." << std::endl;
+            return -1;
+        }
+
+        int numSamples = transfer->valid_length / 2;
+        double prev_filtered_sample = 0.0;
+
+        for (int sampleIndex = 0; sampleIndex < numSamples; sampleIndex++) {
+            double time = (_this->current_tx_sample + sampleIndex) / static_cast<double>(_this->sampleRate);
+            double micSample = _this->micBuffer[(sampleIndex % _this->micBuffer.size())];
+
+            // Apply lowpass filter
+            double filtered_sample = prev_filtered_sample + filter_alpha * (micSample - prev_filtered_sample);
+            prev_filtered_sample = filtered_sample;
+
+            double modulatedPhase = 2 * M_PI * _this->freq * time + _this->modulation_index * filtered_sample;
+
+            double inPhaseComponent = cos(modulatedPhase) * _this->amplitudeScalingFactor;
+            double quadratureComponent = sin(modulatedPhase) * _this->amplitudeScalingFactor;
+
+            int bufferIndex = sampleIndex * 2;
+
+            transfer->buffer[bufferIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
+            transfer->buffer[bufferIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
+        }
+        _this->current_tx_sample += numSamples;
+        return 0;
+    }
+
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        _this->send_sin_wave_tx(transfer);
+        if(_this->paStreamInitialized)
+        {
+           _this->send_audio_mic_tx(transfer);
+        }
+//        _this->send_sin_wave_tx(transfer);
         return 0;
+    }
+
+    static int paCallback(const void *inputBuffer, void *outputBuffer,
+                          unsigned long framesPerBuffer,
+                          const PaStreamCallbackTimeInfo *timeInfo,
+                          PaStreamCallbackFlags statusFlags,
+                          void *userData) {
+        auto *module = static_cast<HackRFSourceModule*>(userData);
+        const float *in = static_cast<const float*>(inputBuffer);
+
+        // Copy inputBuffer to micBuffer
+        module->micBuffer.insert(module->micBuffer.end(), in, in + framesPerBuffer);
+        return paContinue;
+    }
+
+    void initializePaStream() {
+        PaError err = Pa_Initialize();
+
+        if (err != paNoError) {
+            flog::error("PortAudio initialization failed: {0}",Pa_GetErrorText(err));
+            return;
+        }
+
+        // Set up input parameters
+        PaStreamParameters inputParameters;
+        inputParameters.device = Pa_GetDefaultInputDevice(); // Use default input device
+        inputParameters.channelCount = 1; // Mono input
+        inputParameters.sampleFormat = paFloat32; // 32-bit floating point format
+        inputParameters.suggestedLatency = Pa_GetDeviceInfo(inputParameters.device)->defaultLowInputLatency;
+        inputParameters.hostApiSpecificStreamInfo = nullptr;
+
+        // Open PortAudio stream
+        err = Pa_OpenStream(&paStream, &inputParameters, nullptr, AUDIO_SAMPLE_RATE,
+                            AUDIO_FRAMES_PER_BUFFER, paClipOff, paCallback, this);
+        if (err != paNoError) {
+            flog::error("PortAudio stream opening failed: {0}",Pa_GetErrorText(err));
+            return;
+        }
+
+        // Start PortAudio stream
+        err = Pa_StartStream(paStream);
+        if (err != paNoError) {
+            flog::error("PortAudio stream starting failed: {0}",Pa_GetErrorText(err));
+            Pa_CloseStream(paStream);
+            return;
+        }
+
+        paStreamInitialized = true;
+        flog::info("PortAudio stream initialized successfully.");
+    }
+
+    // Close PortAudio stream
+    void closePaStream() {
+        if (paStreamInitialized) {
+            Pa_StopStream(paStream);
+            Pa_CloseStream(paStream);
+            Pa_Terminate();
+            paStreamInitialized = false;
+            flog::info("PortAudio stream closed.");
+        }
     }
 
     std::string name;
@@ -601,6 +670,11 @@ private:
     float amplitudeScalingFactor = 1.5;
     float audioFrequency = 440.0;
     int current_tx_sample = 0;
+
+    PaStream *paStream;
+    std::vector<float> micBuffer;
+    bool paStreamInitialized = false;
+    std::mutex micBufferMutex;
 
 #ifdef __ANDROID__
     int devFd = -1;
