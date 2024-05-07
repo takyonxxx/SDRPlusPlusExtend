@@ -462,9 +462,9 @@ private:
 
         SmGui::LeftLabel("Tx Audio Amplitute");
         SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_audio_amp_", _this->name), &_this->amplitudeScalingFactor, 1.0, 3, 0.1, SmGui::FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_audio_amp_", _this->name), &_this->amplitudeScalingFactor, 1.5, 3, 0.1, SmGui::FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
             config.acquire();
-            config.conf["devices"][_this->selectedSerial]["txAudioAmp"] = (int)_this->amplitudeScalingFactor;
+            config.conf["devices"][_this->selectedSerial]["txAudioAmp"] = _this->amplitudeScalingFactor;
             config.release(true);
         }
 
@@ -577,30 +577,6 @@ private:
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
         _this->send_sin_wave_tx(transfer);
-//        auto modulationIndex = 5.0; // Adjust this value as needed for WFM
-
-//        // Generate the signal to transmit
-//        for (int sampleIndex = 0; sampleIndex < transfer->valid_length / 2; sampleIndex++) {
-//            // Calculate time in seconds
-//            double time = (_this->current_tx_sample + sampleIndex) / static_cast<double>(_this->sampleRate);
-//            double audioSignal = sin(2 * M_PI * _this->audioFrequency * time);
-
-//            double modulatedPhase = 2 * M_PI * _this->freq * time + modulationIndex * audioSignal;
-
-//            // Calculate the in-phase (I) and quadrature (Q) components based on the modulated phase
-//            double inPhaseComponent = cos(modulatedPhase) * _this->amplitudeScalingFactor;
-//            double quadratureComponent = sin(modulatedPhase) * _this->amplitudeScalingFactor;
-
-//            // Calculate the buffer index
-//            int bufferIndex = sampleIndex * 2;
-
-//            // Pack the I/Q samples into the transfer buffer
-//            transfer->buffer[bufferIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
-//            transfer->buffer[bufferIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
-//        }
-
-//        // Update the current sample index to keep track of samples processed
-//        _this->current_tx_sample += transfer->valid_length / 2;
         return 0;
     }
 
