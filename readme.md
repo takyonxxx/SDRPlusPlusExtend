@@ -1,4 +1,4 @@
-# For HackRfOne Enabled Tx Mode With Test Audio Signal (sinwave 100-2000 Hz)
+# For HackRfOne Enabled Tx Mode With Test Audio Wav File
 
 # Prepare the build:
 cd SDRPlusPlusExtend</br>
