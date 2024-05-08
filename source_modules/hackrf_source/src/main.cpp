@@ -14,6 +14,9 @@
 #include <iomanip>
 #include <vector>
 #include <mutex>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 
 #ifndef __ANDROID__
@@ -115,7 +118,11 @@ public:
         config.release();
         selectBySerial(confSerial);
 //        initializePaStream();
-        char * path= "/Users/turkaybiliyor/Desktop/SDRPlusPlusExtend/source_modules/hackrf_source/src/input.wav";
+        std::string marker = "CMakeLists.txt";
+        std::string projectFolder = findProjectFolder(marker);
+        std::string filePath = projectFolder + "/source_modules/hackrf_source/src/input.wav";
+        const char* path = filePath.c_str();
+        std::cout << path << std::endl;
 
         getPcmData(path);
         makeCache();
@@ -129,7 +136,20 @@ public:
         stop(this);
         hackrf_exit();
         sigpath::sourceManager.unregisterSource("HackRF");
-    }    
+    }
+
+    std::string findProjectFolder(const std::string& marker) {
+        fs::path currentDir = fs::current_path();
+        while (currentDir.has_parent_path()) {
+            if (fs::exists(currentDir / marker)) {
+                return currentDir.string();
+            }
+            currentDir = currentDir.parent_path();
+        }
+
+        std::cerr << "Failed to find the project root folder." << std::endl;
+        return std::string();
+    }
 
     void postInit() {}
 
@@ -644,7 +664,7 @@ private:
         }
     }
 
-    void getPcmData(char *path){
+    void getPcmData(const char *path){
 
         WaveData *wave = wavRead(path, strlen(path));
         int nch = wave->header.numChannels;

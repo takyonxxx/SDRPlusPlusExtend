@@ -46,7 +46,7 @@ void dumpDataToFile(WaveData);
 
 
 
-WaveData* wavRead(char fileName[],size_t fileNameSize)
+WaveData* wavRead(const char fileName[],size_t fileNameSize)
 {
     //
     if (fileName[fileNameSize] != '\0')
