@@ -5,6 +5,11 @@ file(GLOB SRC "src/*.cpp")
 
 include(${SDRPP_MODULE_CMAKE})
 
+target_sources(hackrf_source
+  PRIVATE
+  src/wavreader.h
+)
+
 if (MSVC)
     # Lib path
     target_link_directories(hackrf_source PRIVATE "C:/Program Files/PothosSDR/bin/")

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE QtCreatorProject>
-<!-- Written by QtCreator 11.0.3, 2024-05-06T11:28:54. -->
+<!-- Written by QtCreator 11.0.3, 2024-05-08T12:31:27. -->
 <qtcreator>
  <data>
   <variable>EnvironmentId</variable>
@@ -82,6 +82,9 @@
     <valuelist type="QVariantList" key="ClangTools.SuppressedDiagnostics"/>
     <value type="bool" key="ClangTools.UseGlobalSettings">true</value>
    </valuemap>
+   <valuemap type="QVariantMap" key="CppEditor.QuickFix">
+    <value type="bool" key="UseGlobalSettings">true</value>
+   </valuemap>
   </valuemap>
  </data>
  <data>
@@ -93,7 +96,7 @@
    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">{3bcac1f8-743a-445a-b313-f8c5b1430ce5}</value>
    <value type="qlonglong" key="ProjectExplorer.Target.ActiveBuildConfiguration">0</value>
    <value type="qlonglong" key="ProjectExplorer.Target.ActiveDeployConfiguration">0</value>
-   <value type="qlonglong" key="ProjectExplorer.Target.ActiveRunConfiguration">0</value>
+   <value type="qlonglong" key="ProjectExplorer.Target.ActiveRunConfiguration">7</value>
    <valuemap type="QVariantMap" key="ProjectExplorer.Target.BuildConfiguration.0">
     <value type="QString" key="CMake.Build.Type">Build</value>
     <value type="int" key="CMake.Configure.BaseEnvironment">2</value>
@@ -172,12 +175,127 @@
     <value type="int" key="PE.EnvironmentAspect.Base">2</value>
     <valuelist type="QVariantList" key="PE.EnvironmentAspect.Changes"/>
     <value type="bool" key="PE.EnvironmentAspect.PrintOnRun">false</value>
-    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">ProjectExplorer.CustomExecutableRunConfiguration</value>
-    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey"></value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName">conv_find_optim_poly</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">CMakeProjectManager.CMakeRunConfiguration.conv_find_optim_poly</value>
+    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">conv_find_optim_poly</value>
     <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
+    <value type="bool" key="RunConfiguration.UseLibrarySearchPath">true</value>
     <value type="bool" key="RunConfiguration.UseQmlDebuggerAuto">true</value>
+    <value type="QString" key="RunConfiguration.WorkingDirectory.default">/Users/turkaybiliyor/Desktop/SDRPlusPlusExtend/build/core/libcorrect/bin</value>
    </valuemap>
-   <value type="qlonglong" key="ProjectExplorer.Target.RunConfigurationCount">1</value>
+   <valuemap type="QVariantMap" key="ProjectExplorer.Target.RunConfiguration.1">
+    <value type="bool" key="Analyzer.Perf.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.QmlProfiler.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.Valgrind.Settings.UseGlobalSettings">true</value>
+    <valuelist type="QVariantList" key="CustomOutputParsers"/>
+    <value type="int" key="PE.EnvironmentAspect.Base">2</value>
+    <valuelist type="QVariantList" key="PE.EnvironmentAspect.Changes"/>
+    <value type="bool" key="PE.EnvironmentAspect.PrintOnRun">false</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName">conv_find_optim_poly_annealing</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">CMakeProjectManager.CMakeRunConfiguration.conv_find_optim_poly_annealing</value>
+    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">conv_find_optim_poly_annealing</value>
+    <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
+    <value type="bool" key="RunConfiguration.UseLibrarySearchPath">true</value>
+    <value type="bool" key="RunConfiguration.UseQmlDebuggerAuto">true</value>
+    <value type="QString" key="RunConfiguration.WorkingDirectory.default">/Users/turkaybiliyor/Desktop/SDRPlusPlusExtend/build/core/libcorrect/bin</value>
+   </valuemap>
+   <valuemap type="QVariantMap" key="ProjectExplorer.Target.RunConfiguration.2">
+    <value type="bool" key="Analyzer.Perf.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.QmlProfiler.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.Valgrind.Settings.UseGlobalSettings">true</value>
+    <valuelist type="QVariantList" key="CustomOutputParsers"/>
+    <value type="int" key="PE.EnvironmentAspect.Base">2</value>
+    <valuelist type="QVariantList" key="PE.EnvironmentAspect.Changes"/>
+    <value type="bool" key="PE.EnvironmentAspect.PrintOnRun">false</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName">convolutional_shim_test_runner</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">CMakeProjectManager.CMakeRunConfiguration.convolutional_shim_test_runner</value>
+    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">convolutional_shim_test_runner</value>
+    <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
+    <value type="bool" key="RunConfiguration.UseLibrarySearchPath">true</value>
+    <value type="bool" key="RunConfiguration.UseQmlDebuggerAuto">true</value>
+    <value type="QString" key="RunConfiguration.WorkingDirectory.default">/Users/turkaybiliyor/Desktop/SDRPlusPlusExtend/build/tests</value>
+   </valuemap>
+   <valuemap type="QVariantMap" key="ProjectExplorer.Target.RunConfiguration.3">
+    <value type="bool" key="Analyzer.Perf.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.QmlProfiler.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.Valgrind.Settings.UseGlobalSettings">true</value>
+    <valuelist type="QVariantList" key="CustomOutputParsers"/>
+    <value type="int" key="PE.EnvironmentAspect.Base">2</value>
+    <valuelist type="QVariantList" key="PE.EnvironmentAspect.Changes"/>
+    <value type="bool" key="PE.EnvironmentAspect.PrintOnRun">false</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName">convolutional_test_runner</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">CMakeProjectManager.CMakeRunConfiguration.convolutional_test_runner</value>
+    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">convolutional_test_runner</value>
+    <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
+    <value type="bool" key="RunConfiguration.UseLibrarySearchPath">true</value>
+    <value type="bool" key="RunConfiguration.UseQmlDebuggerAuto">true</value>
+    <value type="QString" key="RunConfiguration.WorkingDirectory.default">/Users/turkaybiliyor/Desktop/SDRPlusPlusExtend/build/tests</value>
+   </valuemap>
+   <valuemap type="QVariantMap" key="ProjectExplorer.Target.RunConfiguration.4">
+    <value type="bool" key="Analyzer.Perf.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.QmlProfiler.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.Valgrind.Settings.UseGlobalSettings">true</value>
+    <valuelist type="QVariantList" key="CustomOutputParsers"/>
+    <value type="int" key="PE.EnvironmentAspect.Base">2</value>
+    <valuelist type="QVariantList" key="PE.EnvironmentAspect.Changes"/>
+    <value type="bool" key="PE.EnvironmentAspect.PrintOnRun">false</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName">reed_solomon_shim_interop_test_runner</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">CMakeProjectManager.CMakeRunConfiguration.reed_solomon_shim_interop_test_runner</value>
+    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">reed_solomon_shim_interop_test_runner</value>
+    <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
+    <value type="bool" key="RunConfiguration.UseLibrarySearchPath">true</value>
+    <value type="bool" key="RunConfiguration.UseQmlDebuggerAuto">true</value>
+    <value type="QString" key="RunConfiguration.WorkingDirectory.default">/Users/turkaybiliyor/Desktop/SDRPlusPlusExtend/build/tests</value>
+   </valuemap>
+   <valuemap type="QVariantMap" key="ProjectExplorer.Target.RunConfiguration.5">
+    <value type="bool" key="Analyzer.Perf.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.QmlProfiler.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.Valgrind.Settings.UseGlobalSettings">true</value>
+    <valuelist type="QVariantList" key="CustomOutputParsers"/>
+    <value type="int" key="PE.EnvironmentAspect.Base">2</value>
+    <valuelist type="QVariantList" key="PE.EnvironmentAspect.Changes"/>
+    <value type="bool" key="PE.EnvironmentAspect.PrintOnRun">false</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName">reed_solomon_test_runner</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">CMakeProjectManager.CMakeRunConfiguration.reed_solomon_test_runner</value>
+    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">reed_solomon_test_runner</value>
+    <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
+    <value type="bool" key="RunConfiguration.UseLibrarySearchPath">true</value>
+    <value type="bool" key="RunConfiguration.UseQmlDebuggerAuto">true</value>
+    <value type="QString" key="RunConfiguration.WorkingDirectory.default">/Users/turkaybiliyor/Desktop/SDRPlusPlusExtend/build/tests</value>
+   </valuemap>
+   <valuemap type="QVariantMap" key="ProjectExplorer.Target.RunConfiguration.6">
+    <value type="bool" key="Analyzer.Perf.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.QmlProfiler.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.Valgrind.Settings.UseGlobalSettings">true</value>
+    <valuelist type="QVariantList" key="CustomOutputParsers"/>
+    <value type="int" key="PE.EnvironmentAspect.Base">2</value>
+    <valuelist type="QVariantList" key="PE.EnvironmentAspect.Changes"/>
+    <value type="bool" key="PE.EnvironmentAspect.PrintOnRun">false</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName">rs_find_primitive_poly</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">CMakeProjectManager.CMakeRunConfiguration.rs_find_primitive_poly</value>
+    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">rs_find_primitive_poly</value>
+    <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
+    <value type="bool" key="RunConfiguration.UseLibrarySearchPath">true</value>
+    <value type="bool" key="RunConfiguration.UseQmlDebuggerAuto">true</value>
+    <value type="QString" key="RunConfiguration.WorkingDirectory.default">/Users/turkaybiliyor/Desktop/SDRPlusPlusExtend/build/core/libcorrect/bin</value>
+   </valuemap>
+   <valuemap type="QVariantMap" key="ProjectExplorer.Target.RunConfiguration.7">
+    <value type="bool" key="Analyzer.Perf.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.QmlProfiler.Settings.UseGlobalSettings">true</value>
+    <value type="bool" key="Analyzer.Valgrind.Settings.UseGlobalSettings">true</value>
+    <valuelist type="QVariantList" key="CustomOutputParsers"/>
+    <value type="int" key="PE.EnvironmentAspect.Base">2</value>
+    <valuelist type="QVariantList" key="PE.EnvironmentAspect.Changes"/>
+    <value type="bool" key="PE.EnvironmentAspect.PrintOnRun">false</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.DisplayName">sdrpp</value>
+    <value type="QString" key="ProjectExplorer.ProjectConfiguration.Id">CMakeProjectManager.CMakeRunConfiguration.sdrpp</value>
+    <value type="QString" key="ProjectExplorer.RunConfiguration.BuildKey">sdrpp</value>
+    <value type="bool" key="RunConfiguration.UseCppDebuggerAuto">true</value>
+    <value type="bool" key="RunConfiguration.UseLibrarySearchPath">true</value>
+    <value type="bool" key="RunConfiguration.UseQmlDebuggerAuto">true</value>
+    <value type="QString" key="RunConfiguration.WorkingDirectory.default">/Users/turkaybiliyor/Desktop/SDRPlusPlusExtend/build</value>
+   </valuemap>
+   <value type="qlonglong" key="ProjectExplorer.Target.RunConfigurationCount">8</value>
   </valuemap>
  </data>
  <data>
