@@ -39,10 +39,7 @@ SDRPP_MOD_INFO{
 ConfigManager config;
 
 const char* AGG_MODES_STR = "Off\0Low\0High\0";
-const char* sampleRatesTxt = "20MHz\00016MHz\00010MHz\0008MHz\0005MHz\0004MHz\0002MHz\000";
-const int AUDIO_SAMPLE_RATE = 44100;
-const unsigned long AUDIO_FRAMES_PER_BUFFER = 256;
-
+const char* sampleRatesTxt = "20MHz\00016MHz\00010MHz\0008MHz\0005MHz\0004MHz\0002MHz\0001MHz\000";
 
 const int sampleRates[] = {
     20000000,
@@ -52,6 +49,7 @@ const int sampleRates[] = {
     5000000,
     4000000,
     2000000,
+    1000000,
 };
 
 const int bandwidths[] = {
@@ -99,8 +97,8 @@ public:
         hackrf_init();
 
         // Select the last samplerate option
-        sampleRate = 2000000;
-        srId = 6;
+        sampleRate = 1000000;
+        srId = 7;
 
         handler.ctx = this;
         handler.selectHandler = menuSelected;
@@ -117,22 +115,21 @@ public:
         std::string confSerial = config.conf["device"];
         config.release();
         selectBySerial(confSerial);
-//        initializePaStream();
+        sigpath::sourceManager.registerSource("HackRF", &handler);
+
         std::string marker = "CMakeLists.txt";
         std::string projectFolder = findProjectFolder(marker);
         std::string filePath = projectFolder + "/source_modules/hackrf_source/src/input.wav";
         const char* path = filePath.c_str();
         std::cout << path << std::endl;
 
-        getPcmData(path);
-        makeCache();
-
-        sigpath::sourceManager.registerSource("HackRF", &handler);
-
+        getWaveData(path);
+        makeWaveCache();
+        initializePortAudio();
     }
 
     ~HackRFSourceModule() {
-        closePaStream();
+        finalizePortAudio();
         stop(this);
         hackrf_exit();
         sigpath::sourceManager.unregisterSource("HackRF");
@@ -212,36 +209,32 @@ public:
         bool created = false;
         config.acquire();
         if (!config.conf["devices"].contains(serial)) {
-            config.conf["devices"][serial]["sampleRate"] = 2000000;
+            config.conf["devices"][serial]["sampleRate"] = 1000000;
             config.conf["devices"][serial]["biasT"] = false;
             config.conf["devices"][serial]["amp"] = false;
             config.conf["devices"][serial]["ptt"] = false;
             config.conf["devices"][serial]["lnaGain"] = 40;
             config.conf["devices"][serial]["vgaGain"] = 40;
-            config.conf["devices"][serial]["txVgaGain"] = 47;
-            config.conf["devices"][serial]["txAudioAmp"] = 1.5;
-            config.conf["devices"][serial]["bandwidth"] = 16;
-            config.conf["devices"][serial]["audioFrequency"] = 440.0;
+            config.conf["devices"][serial]["txVgaGain"] = 47;        
+            config.conf["devices"][serial]["bandwidth"] = 16;            
         }
         config.release(created);
 
         // Set default values
         srId = 0;
-        sampleRate = 2000000;
+        sampleRate = 1000000;
         biasT = false;
         amp = false;
         ptt = false;
         lna = 0;
         vga = 0;
-        tx_vga = 0;
-        amplitudeScalingFactor = 1.5;
+        tx_vga = 0;        
         bwId = 1;
-        audioFrequency = 440.0;
 
         // Load from config if available and validate
         if (config.conf["devices"][serial].contains("sampleRate")) {
             int psr = config.conf["devices"][serial]["sampleRate"];
-            for (int i = 0; i < 7; i++) {
+            for (int i = 0; i < 8; i++) {
                 if (sampleRates[i] == psr) {
                     sampleRate = psr;
                     srId = i;
@@ -265,17 +258,11 @@ public:
         }
         if (config.conf["devices"][serial].contains("txVgaGain")) {
             tx_vga = config.conf["devices"][serial]["txVgaGain"];
-        }
-        if (config.conf["devices"][serial].contains("txAudioAmp")) {
-            amplitudeScalingFactor = config.conf["devices"][serial]["txAudioAmp"];
-        }
+        }        
         if (config.conf["devices"][serial].contains("bandwidth")) {
             bwId = config.conf["devices"][serial]["bandwidth"];
             bwId = std::clamp<int>(bwId, 0, 16);
-        }
-        if (config.conf["devices"][serial].contains("audioFrequency")) {
-            audioFrequency = config.conf["devices"][serial]["audioFrequency"];
-        }
+        }       
 
         selectedSerial = serial;
     }
@@ -299,6 +286,7 @@ private:
 
     static void start(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
+
         if (_this->running) { return; }
         if (_this->selectedSerial == "") {
             flog::error("Tried to start HackRF source with empty serial");
@@ -317,8 +305,7 @@ private:
 
         _this->current_tx_sample = 0;
         if(_this->ptt)
-        {
-            _this->amp = true;
+        {           
             _this->biasT = true;
         }
         else
@@ -328,7 +315,6 @@ private:
         }
 
         hackrf_set_sample_rate(_this->openDev, _this->sampleRate);
-
         hackrf_set_baseband_filter_bandwidth(_this->openDev, _this->bandwidthIdToBw(_this->bwId));
         hackrf_set_freq(_this->openDev, _this->freq);
         hackrf_set_antenna_enable(_this->openDev, _this->biasT);
@@ -339,6 +325,7 @@ private:
 
         if(_this->ptt)
         {
+            _this->startRecording();
             hackrf_start_tx(_this->openDev, callback_tx, _this);
         }
         else
@@ -350,6 +337,7 @@ private:
 
     static void stop(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
+
         if (!_this->running) { return; }
 
         _this->running = false;
@@ -358,6 +346,7 @@ private:
         if(_this->ptt)
         {
             hackrf_stop_tx(_this->openDev);
+            _this->stopRecording();
         }
         else
             hackrf_stop_rx(_this->openDev);
@@ -480,23 +469,6 @@ private:
             config.release(true);
         }
 
-        SmGui::LeftLabel("Tx Audio Frequency");
-        SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_audio_freq", _this->name), &_this->audioFrequency, 200, 2000, 10, SmGui::FMT_STR_FLOAT_NO_DECIMAL)) {
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["audioFrequency"] = (int)_this->audioFrequency;
-            config.release(true);
-        }
-
-
-        SmGui::LeftLabel("Tx Audio Amplitute");
-        SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_audio_amp_", _this->name), &_this->amplitudeScalingFactor, 1.5, 3, 0.1, SmGui::FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["txAudioAmp"] = _this->amplitudeScalingFactor;
-            config.release(true);
-        }
-
         if (SmGui::Checkbox(CONCAT("Ptt Enabled - Tx Mode##_hackrf_ptt_", _this->name), &_this->ptt)) {
 
             if (_this->running) {
@@ -536,7 +508,8 @@ private:
         return 0;
     }
 
-    int send_wav_tx(int8_t *buffer, uint32_t length) {
+    int send_audio_tx(int8_t *buffer, uint32_t length) {
+
         int _nsample = (float)_audioSampleRate * (float)BUF_LEN / (float)sampleRate / 2.0;
         int totalSampleCount = _numSampleCount / _nsample;
 
@@ -552,119 +525,12 @@ private:
         return 0;
     }
 
-    static int send_sin_wave_tx(hackrf_transfer* transfer) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        // auto modulationIndex = 0.5; // Adjust this value as needed for NFM
-        auto modulationIndex = 5.0; // Adjust this value as needed for WFM
-
-        // Generate the signal to transmit
-        for (int sampleIndex = 0; sampleIndex < transfer->valid_length / 2; sampleIndex++) {
-            // Calculate time in seconds
-            double time = (_this->current_tx_sample + sampleIndex) / static_cast<double>(_this->sampleRate);
-            double audioSignal = sin(2 * M_PI * _this->audioFrequency * time);
-
-            double modulatedPhase = 2 * M_PI * _this->freq * time + modulationIndex * audioSignal;
-
-            // Calculate the in-phase (I) and quadrature (Q) components based on the modulated phase
-            double inPhaseComponent = cos(modulatedPhase) * _this->amplitudeScalingFactor;
-            double quadratureComponent = sin(modulatedPhase) * _this->amplitudeScalingFactor;
-
-            // Calculate the buffer index
-            int bufferIndex = sampleIndex * 2;
-
-            // Pack the I/Q samples into the transfer buffer
-            transfer->buffer[bufferIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
-            transfer->buffer[bufferIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
-        }
-
-        // Update the current sample index to keep track of samples processed
-        _this->current_tx_sample += transfer->valid_length / 2;
-        return 0;
-    }
-
-    static int send_audio_mic_tx(hackrf_transfer* transfer) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        std::lock_guard<std::mutex> lock(_this->micBufferMutex);
-
-        if (_this->micBuffer.empty()) {
-            std::cerr << "Error: micBuffer is empty. Capture microphone input first." << std::endl;
-            return -1;
-        }
-        //TODO
-        return 0;
-    }
-
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        return _this->send_wav_tx((int8_t *)transfer->buffer, transfer->valid_length);
-//        if(_this->paStreamInitialized)
-//        {
-//           return _this->send_audio_mic_tx(transfer);
-//        }
-//        return _this->send_sin_wave_tx(transfer);
-    }
+        return _this->send_audio_tx((int8_t *)transfer->buffer, transfer->valid_length);
+    }  
 
-    static int paCallback(const void *inputBuffer, void *outputBuffer,
-                          unsigned long framesPerBuffer,
-                          const PaStreamCallbackTimeInfo *timeInfo,
-                          PaStreamCallbackFlags statusFlags,
-                          void *userData) {
-        auto *module = static_cast<HackRFSourceModule*>(userData);
-        const float *in = static_cast<const float*>(inputBuffer);
-
-        // Copy inputBuffer to micBuffer
-        module->micBuffer.insert(module->micBuffer.end(), in, in + framesPerBuffer);
-        return paContinue;
-    }
-
-    void initializePaStream() {
-        PaError err = Pa_Initialize();
-
-        if (err != paNoError) {
-            flog::error("PortAudio initialization failed: {0}",Pa_GetErrorText(err));
-            return;
-        }
-
-        // Set up input parameters
-        PaStreamParameters inputParameters;
-        inputParameters.device = Pa_GetDefaultInputDevice(); // Use default input device
-        inputParameters.channelCount = 1; // Mono input
-        inputParameters.sampleFormat = paFloat32; // 32-bit floating point format
-        inputParameters.suggestedLatency = Pa_GetDeviceInfo(inputParameters.device)->defaultLowInputLatency;
-        inputParameters.hostApiSpecificStreamInfo = nullptr;
-
-        // Open PortAudio stream
-        err = Pa_OpenStream(&paStream, &inputParameters, nullptr, AUDIO_SAMPLE_RATE,
-                            AUDIO_FRAMES_PER_BUFFER, paClipOff, paCallback, this);
-        if (err != paNoError) {
-            flog::error("PortAudio stream opening failed: {0}",Pa_GetErrorText(err));
-            return;
-        }
-
-        // Start PortAudio stream
-        err = Pa_StartStream(paStream);
-        if (err != paNoError) {
-            flog::error("PortAudio stream starting failed: {0}",Pa_GetErrorText(err));
-            Pa_CloseStream(paStream);
-            return;
-        }
-
-        paStreamInitialized = true;
-        flog::info("PortAudio stream initialized successfully.");
-    }
-
-    // Close PortAudio stream
-    void closePaStream() {
-        if (paStreamInitialized) {
-            Pa_StopStream(paStream);
-            Pa_CloseStream(paStream);
-            Pa_Terminate();
-            paStreamInitialized = false;
-            flog::info("PortAudio stream closed.");
-        }
-    }
-
-    void getPcmData(const char *path){
+    void getWaveData(const char *path){
 
         WaveData *wave = wavRead(path, strlen(path));
         int nch = wave->header.numChannels;
@@ -695,7 +561,7 @@ private:
         }
     }
 
-    void makeCache() {
+    void makeWaveCache() {
         int _nsample = (float) _audioSampleRate * (float) BUF_LEN / (float) sampleRate / 2.0;
 
         _iqCache = new int8_t *[_numSampleCount / _nsample]();
@@ -724,6 +590,106 @@ private:
         }
     }
 
+    static int audioCallback(const void *inputBuffer, void *, unsigned long framesPerBuffer,
+                      const PaStreamCallbackTimeInfo *, PaStreamCallbackFlags,
+                      void *userData) {
+        auto *recordedBuffer = static_cast<std::vector<float> *>(userData);
+        const float *input = static_cast<const float *>(inputBuffer);
+        recordedBuffer->insert(recordedBuffer->end(), input, input + framesPerBuffer);
+
+        // Check if the buffer has reached 1024 bytes (1 float = 4 bytes, so 1024 / 4 = 256 floats)
+        const size_t targetSize = 4096 / sizeof(float);
+        if (recordedBuffer->size() >= targetSize) {
+            // std::cout << "Mic buffer size : " << recordedBuffer->size() << std::endl;
+            recordedBuffer->clear();
+        }
+        return paContinue;
+    }
+
+    void initializePortAudio() {
+        // Initialize PortAudio
+        PaError err = Pa_Initialize();
+        if (err != paNoError) {
+            std::cerr << "PortAudio initialization failed: " << Pa_GetErrorText(err) << std::endl;
+            return;
+        }
+
+        // Set up input parameters
+        PaStreamParameters inputParams;
+        inputParams.device = Pa_GetDefaultInputDevice(); // Use the default input device
+        inputParams.channelCount = 1; // Mono recording
+        inputParams.sampleFormat = paFloat32; // 32-bit floating-point format
+        inputParams.suggestedLatency = Pa_GetDeviceInfo(inputParams.device)->defaultLowInputLatency;
+        inputParams.hostApiSpecificStreamInfo = nullptr;
+
+        // Open the stream
+        err = Pa_OpenStream(&pa_stream, &inputParams, nullptr, 44100, 512, paClipOff, audioCallback, &recordedBuffer);
+        if (err != paNoError) {
+            std::cerr << "Error opening stream: " << Pa_GetErrorText(err) << std::endl;
+            Pa_Terminate();
+            return;
+        }
+
+        std::cout << "PortAudio initialized and stream opened..." << std::endl;
+    }
+
+    void finalizePortAudio() {
+        // Check if the stream exists and is open
+        if (pa_stream != nullptr) {
+            // Stop the stream if it is running
+            if (isRecording) {
+                PaError err = Pa_StopStream(pa_stream);
+                if (err != paNoError) {
+                    std::cerr << "Error stopping stream: " << Pa_GetErrorText(err) << std::endl;
+                }
+                isRecording = false;
+            }
+
+            // Close the stream
+            PaError err = Pa_CloseStream(pa_stream);
+            if (err != paNoError) {
+                std::cerr << "Error closing stream: " << Pa_GetErrorText(err) << std::endl;
+            }
+
+            // Reset the stream pointer
+            pa_stream = nullptr;
+        }
+
+        // Terminate PortAudio
+        PaError err = Pa_Terminate();
+        if (err != paNoError) {
+            std::cerr << "PortAudio termination failed: " << Pa_GetErrorText(err) << std::endl;
+        }
+
+        std::cout << "PortAudio finalized..." << std::endl;
+    }
+
+    void startRecording() {
+        // Only start recording if the stream is not already running
+        if (!isRecording && pa_stream) {
+            PaError err = Pa_StartStream(pa_stream);
+            if (err != paNoError) {
+                std::cerr << "Error starting stream: " << Pa_GetErrorText(err) << std::endl;
+                return;
+            }
+            isRecording = true;
+            std::cout << "PortAudio started recording..." << std::endl;
+        }
+    }
+
+    void stopRecording() {
+        // Only stop recording if the stream is currently running
+        if (isRecording && pa_stream) {
+            PaError err = Pa_StopStream(pa_stream);
+            if (err != paNoError) {
+                std::cerr << "Error stopping stream: " << Pa_GetErrorText(err) << std::endl;
+                return;
+            }
+            isRecording = false;
+            std::cout << "PortAudio stopped recording..." << std::endl;
+        }
+    }
+
     std::string name;
     hackrf_device* openDev;
     bool enabled = true;
@@ -741,9 +707,7 @@ private:
     bool ptt = false;
     float lna = 0;
     float vga = 0;
-    float tx_vga = 0;
-    float amplitudeScalingFactor = 1.5;
-    float audioFrequency = 440.0;
+    float tx_vga = 0;   
     int current_tx_sample = 0;
 
     // for wav file
@@ -758,11 +722,9 @@ private:
     int8_t ** _iqCache;
     int _buffCount = 0;
 
-    // for mic input
-    PaStream *paStream;
-    std::vector<float> micBuffer;
-    bool paStreamInitialized = false;
-    std::mutex micBufferMutex;
+    std::vector<float> recordedBuffer;
+    PaStream *pa_stream = nullptr;
+    bool isRecording = false;
 
 #ifdef __ANDROID__
     int devFd = -1;
