@@ -126,6 +126,9 @@ public:
 
         getWaveData(path);
         makeWaveCache();
+
+        auto mic_buffer = readMicrophoneBuffer();
+        std::cout << mic_buffer.size() << std::endl;
     }
 
     ~HackRFSourceModule() {
@@ -525,7 +528,6 @@ private:
     }
 
     int send_mic_tx(int8_t *buffer, uint32_t length) {
-        // std::copy_n(_iqCache[0], _AUDIO_BUF_LEN, buffer);
         return 0;
     }
 
@@ -596,26 +598,25 @@ private:
         }
     }
 
-    std::vector<int8_t> readMicrophoneBuffer() {
+    std::vector<float> readMicrophoneBuffer() {
+
+        const int _AUDIO_BUF_LEN = 8196 * 4;
 
         PaError err;
         PaStream *pa_stream = nullptr;
-        int _AUDIO_BUF_LEN = 8196 * 4;
-        int _AUDIO_SAMPLE_RATE = 44100;
-        std::vector<float> interpolatedBuffer(_AUDIO_BUF_LEN);
-        std::vector<int8_t> modulatedBuffer(_AUDIO_BUF_LEN);
+        std::vector<float> audioBuffer(_AUDIO_BUF_LEN);
 
         err = Pa_Initialize();
         if (err != paNoError) {
             std::cerr << "PortAudio initialization failed: " << Pa_GetErrorText(err) << std::endl;
-             return modulatedBuffer;
+            return audioBuffer;
         }
 
-        err = Pa_OpenDefaultStream(&pa_stream, 1, 0, paFloat32, _AUDIO_SAMPLE_RATE, 512, nullptr, nullptr);
+        err = Pa_OpenDefaultStream(&pa_stream, 1, 0, paFloat32, AUDIO_SAMPLE_RATE, 512, nullptr, nullptr);
         if (err != paNoError) {
             std::cerr << "PortAudio stream opening error: " << Pa_GetErrorText(err) << std::endl;
             Pa_Terminate();
-             return modulatedBuffer;
+             return audioBuffer;
         }
 
         err = Pa_StartStream(pa_stream);
@@ -623,39 +624,35 @@ private:
             std::cerr << "PortAudio stream starting error: " << Pa_GetErrorText(err) << std::endl;
             Pa_CloseStream(pa_stream); // Close the stream
             Pa_Terminate();
-            return modulatedBuffer;
+            return audioBuffer;
         }
 
-        std::vector<float> buffer(_AUDIO_BUF_LEN);
-        err = Pa_ReadStream(pa_stream, buffer.data(), _AUDIO_BUF_LEN);
+        err = Pa_ReadStream(pa_stream, audioBuffer.data(), _AUDIO_BUF_LEN);
         if (err != paNoError) {
             std::cerr << "PortAudio read stream error: " << Pa_GetErrorText(err) << std::endl;
-            return modulatedBuffer;
+            return audioBuffer;
         }
 
         err = Pa_StopStream(pa_stream);
         if (err != paNoError) {
             std::cerr << "PortAudio stream stopping error: " << Pa_GetErrorText(err) << std::endl;
-            return modulatedBuffer;
+            return audioBuffer;
         }
 
         err = Pa_CloseStream(pa_stream);
         if (err != paNoError) {
             std::cerr << "PortAudio stream closing error: " << Pa_GetErrorText(err) << std::endl;
-            return modulatedBuffer;
+            return audioBuffer;
         }
 
         pa_stream = nullptr;
         err = Pa_Terminate();
         if (err != paNoError) {
             std::cerr << "PortAudio termination error: " << Pa_GetErrorText(err) << std::endl;
-            return modulatedBuffer;
+            return audioBuffer;
         }
 
-        interpolation(buffer.data(), _AUDIO_BUF_LEN, interpolatedBuffer.data(), _AUDIO_BUF_LEN);
-        modulation(interpolatedBuffer.data(), modulatedBuffer.data(), 0);
-
-        return modulatedBuffer;
+        return audioBuffer;
     }
 
     std::string name;
