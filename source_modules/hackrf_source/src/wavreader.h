@@ -9,9 +9,7 @@
 #define DEBUG 1
 #define BUF_LEN 262144         //hackrf tx buf
 #define BUF_NUM  63
-#define AUDIO_BUF_LEN 4096
 #define AUDIO_SAMPLE_RATE 48000
-#define AUDIO_DURATION_SEC 3
 #define BYTES_PER_SAMPLE 2
 
 
