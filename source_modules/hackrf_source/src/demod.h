@@ -134,8 +134,8 @@ void interpolate_and_modulate(int8_t* buffer, std::vector<float>& upsampledAudio
         while (fm_phase < (float)(-M_PI))
             fm_phase += (float)(2.0 * M_PI);
 
-        buffer[i * BYTES_PER_SAMPLE] = (int8_t)(sin(fm_phase) * 127.0);
-        buffer[i * BYTES_PER_SAMPLE + 1] = (int8_t)(cos(fm_phase) * 127.0);
+        buffer[i] = (int8_t)(sin(fm_phase) * 127.0);
+        buffer[i + 1] = (int8_t)(cos(fm_phase) * 127.0);
     }
 }
 

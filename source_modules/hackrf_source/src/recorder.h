@@ -10,7 +10,7 @@ std::vector<float> readMicrophoneBuffer() {
 
     PaError err;
     PaStream *pa_stream = nullptr;
-    std::vector<float> audioBuffer(BUF_LEN * BYTES_PER_SAMPLE);
+    std::vector<float> audioBuffer(BUF_LEN);
 
     err = Pa_Initialize();
     if (err != paNoError) {
@@ -33,7 +33,7 @@ std::vector<float> readMicrophoneBuffer() {
         return audioBuffer;
     }
 
-    err = Pa_ReadStream(pa_stream, audioBuffer.data(), BUF_LEN * BYTES_PER_SAMPLE);
+    err = Pa_ReadStream(pa_stream, audioBuffer.data(), BUF_LEN);
     if (err != paNoError) {
         std::cerr << "PortAudio read stream error: " << Pa_GetErrorText(err) << std::endl;
         return audioBuffer;
