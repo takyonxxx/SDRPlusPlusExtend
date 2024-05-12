@@ -122,13 +122,10 @@ public:
         std::string projectFolder = findProjectFolder(marker);
         std::string filePath = projectFolder + "/source_modules/hackrf_source/src/input.wav";
         const char* path = filePath.c_str();
-        std::cout << path << std::endl;
-
         getWaveData(path);
-        makeWaveCache();
 
-        auto mic_buffer = readMicrophoneBuffer();
-        std::cout << mic_buffer.size() << std::endl;
+        // auto mic_buffer = readMicrophoneBuffer();
+        // std::cout << mic_buffer.size() << std::endl;
     }
 
     ~HackRFSourceModule() {
@@ -310,7 +307,8 @@ private:
         _this->current_tx_sample = 0;
         if(_this->ptt)
         {           
-            _this->biasT = true;
+            _this->biasT = true;            
+            _this->makeWaveCache();
         }
         else
         {
@@ -511,30 +509,41 @@ private:
     }
 
     int send_wav_tx(int8_t *buffer, uint32_t length) {
+        if(_iqCache)
+        {
+            int _nsample = (float)_audioSampleRate * (float)BUF_LEN / (float)sampleRate / 2.0;
+            int totalSampleCount = _numSampleCount / _nsample;
 
-        int _nsample = (float)_audioSampleRate * (float)BUF_LEN / (float)sampleRate / 2.0;
-        int totalSampleCount = _numSampleCount / _nsample;
+            if (_buffCount >= totalSampleCount) {
+                _buffCount = 0;
+            }
 
-        if (_buffCount >= totalSampleCount) {
-            _buffCount = 0;
-        }
-
-        if (_buffCount < totalSampleCount) {
-            uint32_t copyLength = std::min(length, static_cast<uint32_t>(BUF_LEN));
-            std::copy_n(_iqCache[_buffCount], copyLength, buffer);
-            _buffCount++;
+            if (_buffCount < totalSampleCount) {
+                uint32_t copyLength = std::min(length, static_cast<uint32_t>(BUF_LEN));
+                std::copy_n(_iqCache[_buffCount], copyLength, buffer);
+                _buffCount++;
+            }
         }
         return 0;
     }
 
     int send_mic_tx(int8_t *buffer, uint32_t length) {
+        bufferMutex.lock();
+        std::cout << length << std::endl;
+        bufferMutex.unlock();
         return 0;
     }
 
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        // return _this->send_mic_tx((int8_t *)transfer->buffer, transfer->valid_length);
-        return _this->send_wav_tx((int8_t *)transfer->buffer, transfer->valid_length);
+        if(_this->_iqCache)
+        {
+            return _this->send_wav_tx((int8_t *)transfer->buffer, transfer->valid_length);
+        }
+        else
+        {
+            return _this->send_mic_tx((int8_t *)transfer->buffer, transfer->valid_length);
+        }
         return 0;
     }  
 
@@ -581,19 +590,19 @@ private:
         for (int i = 0; i < _numSampleCount / _nsample; i++) {
             if (i < _numSampleCount / _nsample / 4) {
                 interpolation(_audioSampleBuf + (_nsample * i), _nsample, _new_audio_buf, BUF_LEN / 2);
-                modulation(_new_audio_buf, _iqCache[i], 0);
+                modulation(_new_audio_buf, _iqCache[i], 0, sampleRate);
             }
             else if (i < _numSampleCount / _nsample / 4 * 2) {
                 interpolation(_audioSampleBuf + (_nsample * i), _nsample, _new_audio_buf1, BUF_LEN / 2);
-                modulation(_new_audio_buf1, _iqCache[i], 0);
+                modulation(_new_audio_buf1, _iqCache[i], 0, sampleRate);
             }
             else if (i < _numSampleCount / _nsample / 4 * 3) {
                 interpolation(_audioSampleBuf + (_nsample * i), _nsample, _new_audio_buf2, BUF_LEN / 2);
-                modulation(_new_audio_buf2, _iqCache[i], 0);
+                modulation(_new_audio_buf2, _iqCache[i], 0, sampleRate);
             }
             else if (i < _numSampleCount / _nsample) {
                 interpolation(_audioSampleBuf + (_nsample * i), _nsample, _new_audio_buf3, BUF_LEN / 2);
-                modulation(_new_audio_buf3, _iqCache[i], 0);
+                modulation(_new_audio_buf3, _iqCache[i], 0, sampleRate);
             }
         }
     }

@@ -8,7 +8,7 @@
 
 #define DEBUG 1
 #define BUF_LEN 262144         //hackrf tx buf
-#define BUF_NUM  63
+#define BUF_NUM  256
 #define AUDIO_SAMPLE_RATE 44100
 #define BYTES_PER_SAMPLE 2
 
@@ -191,13 +191,11 @@ void interpolation(float * in_buf, uint32_t in_samples, float * out_buf, uint32_
 }
 
 
-void modulation(float * input, int8_t * output, uint32_t mode) {
+void modulation(float * input, int8_t * output, uint32_t mode, int hackrf_sample) {
     double fm_deviation = 0.0;
     float gain = 0.9;
 
     double fm_phase = 0.0;
-
-    int hackrf_sample = 2000000;
 
     if (mode == 0) {
         fm_deviation = 2.0 * M_PI * 75.0e3 / hackrf_sample; // 75 kHz max deviation WBFM
