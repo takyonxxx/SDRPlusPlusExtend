@@ -6,13 +6,15 @@
 #include <vector>
 #include <queue>
 
+static std::queue<std::vector<float>> s_audioBufferQueue;
+
 class PaRecorder {
 public:
     PaRecorder() : pa_stream(nullptr) {}
+    const int NUM_CHANNELS = 1;
+    const int SAMPLE_BLOCK_SIZE = BUF_LEN / 8;
 
-    void initPa() {
-        const int NUM_CHANNELS = 1;
-        const int SAMPLE_BLOCK_SIZE = 1024;
+    void initPa() {        
 
         err = Pa_Initialize();
         if (err != paNoError) {
@@ -83,7 +85,6 @@ public:
     }
 
     void enqueueAudioData(const std::vector<float>& audioData) {
-        std::cout << audioBufferQueue.size() << std::endl;
         std::lock_guard<std::mutex> lock(bufferMutex);
         audioBufferQueue.push(audioData);
     }
@@ -113,7 +114,7 @@ private:
 
         const float *in = static_cast<const float*>(inputBuffer);
         recorder->audioBuffer.assign(in, in + framesPerBuffer);
-        recorder->enqueueAudioData(recorder->audioBuffer);
+        s_audioBufferQueue.push(recorder->audioBuffer);
         return paContinue;
     }
 
@@ -122,7 +123,7 @@ private:
     std::vector<float> audioBuffer;
     std::queue<std::vector<float>> audioBufferQueue;
     std::mutex bufferMutex;
-    PaRecorder* handler;
+
 };
 
 #endif // RECORDER_H

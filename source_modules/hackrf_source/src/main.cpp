@@ -530,10 +530,12 @@ private:
 
         std::lock_guard<std::mutex> lock(bufferMutex);
 
-        // std::vector<float>& upsampledAudio = audioBuffer;
-        // interpolate_and_modulate(buffer, upsampledAudio, length, 0, sampleRate);
-
-        // std::cout << "Buffer size: " << micBuffer.size() << std::endl;
+        if (!s_audioBufferQueue.empty()) {
+            std::vector<float> audioData = std::move(s_audioBufferQueue.front());
+            s_audioBufferQueue.pop();
+            interpolate_and_modulate(buffer, audioData, audioData.size(), 0, sampleRate);
+            std::cout << "Buffer size: " << audioData.size() << std::endl;
+        }
 
         return 0;
     }
