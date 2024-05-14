@@ -91,6 +91,9 @@ public:
     HackRFSourceModule(std::string name) {
         this->name = name;
 
+        paRecorder = new PaRecorder();
+        paRecorder->initPa();
+
         hackrf_init();
 
         // Select the last samplerate option
@@ -114,15 +117,16 @@ public:
         selectBySerial(confSerial);
         sigpath::sourceManager.registerSource("HackRF", &handler);
 
-        std::string marker = "CMakeLists.txt";
-        std::string projectFolder = findProjectFolder(marker);
-        std::string filePath = projectFolder + "/source_modules/hackrf_source/src/input.wav";
-        const char* path = filePath.c_str();
-        prepareWaveData(path);
-        //audioBuffer = readMicrophoneBuffer();
+        // std::string marker = "CMakeLists.txt";
+        // std::string projectFolder = findProjectFolder(marker);
+        // std::string filePath = projectFolder + "/source_modules/hackrf_source/src/input.wav";
+        // const char* path = filePath.c_str();
+        // prepareWaveData(path);
     }
 
     ~HackRFSourceModule() {
+        paRecorder->finishPa();
+        delete paRecorder;
         stop(this);
         hackrf_exit();
         sigpath::sourceManager.unregisterSource("HackRF");
@@ -302,6 +306,7 @@ private:
         if(_this->ptt)
         {           
             _this->biasT = true;
+            _this->paRecorder->startPaCallback();
         }
         else
         {
@@ -326,7 +331,7 @@ private:
             hackrf_start_rx(_this->openDev, callback_rx, _this);
 
         _this->running = true;        
-        flog::info("HackRFSourceModule '{0} {1}': Start!", _this->name, _this->ptt);
+        flog::info("HackRFSourceModule '{0} {1}': Start!", _this->name, _this->ptt);        
     }
 
     static void stop(void* ctx) {
@@ -338,8 +343,9 @@ private:
         _this->stream.stopWriter();
 
         if(_this->ptt)
-        {
+        {            
             hackrf_stop_tx(_this->openDev);
+            _this->paRecorder->stopPaCallback();
         }
         else
             hackrf_stop_rx(_this->openDev);
@@ -524,15 +530,11 @@ private:
 
         std::lock_guard<std::mutex> lock(bufferMutex);
 
-        if (audioBuffer.empty() || length % sizeof(float) != 0) {
-            memset(buffer, 0, length);
-            return 0;
-        }
+        // std::vector<float>& upsampledAudio = audioBuffer;
+        // interpolate_and_modulate(buffer, upsampledAudio, length, 0, sampleRate);
 
-        std::vector<float>& upsampledAudio = audioBuffer;
-        interpolate_and_modulate(buffer, upsampledAudio, length, 0, sampleRate);
+        // std::cout << "Buffer size: " << micBuffer.size() << std::endl;
 
-        std::cout << "Buffer size: " << length << std::endl;
         return 0;
     }
 
@@ -542,7 +544,7 @@ private:
         {
             return _this->send_wav_tx((int8_t *)transfer->buffer, transfer->valid_length);
         }
-        else if(_this->audioBuffer.size() > 0)
+        else
         {
             return _this->send_mic_tx((int8_t *)transfer->buffer, transfer->valid_length);
         }
@@ -641,6 +643,7 @@ private:
 
     std::mutex bufferMutex;
     std::vector<float> audioBuffer;
+    PaRecorder *paRecorder = nullptr;
 
 #ifdef __ANDROID__
     int devFd = -1;
