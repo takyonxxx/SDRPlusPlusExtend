@@ -17,4 +17,10 @@
 #define DEVIATION 75e3
 #define AUDIO_SAMPLE_RATE 44100
 
+enum class TxSendType {
+    MIC_ONLY,
+    SINWAVE,
+    WAV
+};
+
 #endif // CONSTANTS_H

@@ -36,6 +36,7 @@ ConfigManager config;
 
 const char* AGG_MODES_STR = "Off\0Low\0High\0";
 const char* sampleRatesTxt = "20MHz\00016MHz\00010MHz\0008MHz\0005MHz\0004MHz\0002MHz\0001MHz\000";
+TxSendType txSendType = TxSendType::SINWAVE;
 
 const int sampleRates[] = {
     20000000,
@@ -90,9 +91,7 @@ class HackRFSourceModule : public ModuleManager::Instance {
 public:
     HackRFSourceModule(std::string name) {
         this->name = name;
-
-        paRecorder = new PaRecorder();
-        paRecorder->initPa();
+        setTxSendType(TxSendType::SINWAVE);
 
         hackrf_init();
 
@@ -117,21 +116,37 @@ public:
         selectBySerial(confSerial);
         sigpath::sourceManager.registerSource("HackRF", &handler);
 
-        // std::string marker = "CMakeLists.txt";
-        // std::string projectFolder = findProjectFolder(marker);
-        // std::string filePath = projectFolder + "/source_modules/hackrf_source/src/input.wav";
-        // const char* path = filePath.c_str();
-        // prepareWaveData(path);
+        if (txSendType == TxSendType::WAV) {
+             std::string marker = "CMakeLists.txt";
+             std::string projectFolder = findProjectFolder(marker);
+             std::string filePath = projectFolder + "/source_modules/hackrf_source/src/input.wav";
+             const char* path = filePath.c_str();
+             prepareWaveData(path);
+        }
+        else if (txSendType == TxSendType::MIC_ONLY)
+        {
+             paRecorder = new PaRecorder();
+             paRecorder->initPa();
+        }
     }
 
     ~HackRFSourceModule() {
-        paRecorder->finishPa();
-        delete paRecorder;
         stop(this);
         hackrf_exit();
         sigpath::sourceManager.unregisterSource("HackRF");
-        delete[] _iqCache[0];
-        delete[] _iqCache;
+        if (txSendType == TxSendType::MIC_ONLY)
+        {
+             paRecorder->finishPa();
+             delete paRecorder;
+        }
+        else if (txSendType == TxSendType::WAV) {
+            delete[] _iqCache[0];
+            delete[] _iqCache;
+        }
+    }
+
+    void setTxSendType(TxSendType type) {
+        txSendType = type;
     }
 
     std::string findProjectFolder(const std::string& marker) {
@@ -306,7 +321,10 @@ private:
         if(_this->ptt)
         {           
             _this->biasT = true;
-            _this->paRecorder->startPaCallback();
+            if (txSendType == TxSendType::MIC_ONLY)
+            {
+                _this->paRecorder->startPaCallback();
+            }
         }
         else
         {
@@ -346,7 +364,10 @@ private:
         if(_this->ptt)
         {            
             hackrf_stop_tx(_this->openDev);
-            _this->paRecorder->stopPaCallback();
+            if (txSendType == TxSendType::MIC_ONLY)
+            {
+                _this->paRecorder->stopPaCallback();
+            }
         }
         else
             hackrf_stop_rx(_this->openDev);
@@ -528,49 +549,76 @@ private:
     }
 
     int send_mic_tx(int8_t *buffer, uint32_t length) {
+        double modulationIndex = 5.0;
+        double amplitudeScalingFactor = 1.5;
+
         std::unique_lock<std::mutex> lock(s_audioBufferMutex);
-
-        // Wait until s_audioBufferQueue is not empty
-        s_audioBufferCondition.wait(lock, []{ return !s_audioBufferQueue.empty(); });
-
-        // Once s_audioBufferQueue is not empty, proceed
-        while (length > 0 && !s_audioBufferQueue.empty()) {
-            // Dequeue a chunk of audio data from the buffer queue
+        const int chunkSize = 1024;
+        int numChunksNeeded = length / (2 * chunkSize);
+        for (int chunkIndex = 0; chunkIndex < numChunksNeeded; ++chunkIndex) {
+            s_audioBufferCondition.wait(lock, []{ return !s_audioBufferQueue.empty(); });
             std::vector<float> audioData = std::move(s_audioBufferQueue.front());
             s_audioBufferQueue.pop();
 
-            lock.unlock(); // Unlock before calling interpolate_and_modulate
-
-            // Calculate the chunk size based on the minimum of remaining buffer length and audio data size
-            uint32_t chunkSize = std::min(length, (uint32_t)audioData.size());
-
-            // Interpolate and modulate a chunk of audio data to match the length of the buffer
-            interpolate_and_modulate(buffer, audioData, chunkSize, 0, sampleRate);
-
-            // Update buffer pointer and remaining length
-            buffer += chunkSize;
-            length -= chunkSize;
-
-            lock.lock(); // Lock again before checking for more audio data
+            for (int sampleIndex = 0; sampleIndex < chunkSize; ++sampleIndex) {
+                double time = (current_tx_sample + sampleIndex) / sampleRate;
+                double audioSignal = audioData[sampleIndex % audioData.size()];
+                double modulatedPhase = 2 * M_PI * freq * time + modulationIndex * audioSignal;
+                double inPhaseComponent = cos(modulatedPhase) * amplitudeScalingFactor;
+                double quadratureComponent = sin(modulatedPhase) * amplitudeScalingFactor;
+                int bufferIndex = (chunkIndex * chunkSize + sampleIndex) * 2;
+                buffer[bufferIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
+                buffer[bufferIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
+            }
+            current_tx_sample += chunkSize;
         }
 
-        std::cout << "Buffer size: " << length << std::endl;
+        current_tx_sample = 0;
+        return 0;
+    }
 
+    int send_sin_wave_tx(int8_t *buffer, uint32_t length) {
+        double modulationIndex;
+        double amplitudeScalingFactor;
+
+        modulationIndex = 5.0;
+        amplitudeScalingFactor = 1.5;
+
+        for (int sampleIndex = 0; sampleIndex < length / 2; sampleIndex++) {
+            // Calculate time in seconds
+            double time = (current_tx_sample + sampleIndex) / static_cast<double>(sampleRate);
+            double audioSignal = sin(2 * M_PI * 720 * time);
+            double modulatedPhase = 2 * M_PI * freq * time + modulationIndex * audioSignal;
+            double inPhaseComponent = cos(modulatedPhase) * amplitudeScalingFactor;
+            double quadratureComponent = sin(modulatedPhase) * amplitudeScalingFactor;
+            int bufferIndex = sampleIndex * 2;
+            buffer[bufferIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
+            buffer[bufferIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
+        }
+        current_tx_sample += length / 2;
         return 0;
     }
 
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        if(_this->_iqCache)
+        if (txSendType == TxSendType::WAV)
         {
-            return _this->send_wav_tx((int8_t *)transfer->buffer, transfer->valid_length);
+            if(_this->_iqCache)
+            {
+                return _this->send_wav_tx((int8_t *)transfer->buffer, transfer->valid_length);
+            }
         }
-        else
+        else if (txSendType == TxSendType::SINWAVE)
+        {
+            return _this->send_sin_wave_tx((int8_t *)transfer->buffer, transfer->valid_length);
+        }
+        else if (txSendType == TxSendType::MIC_ONLY)
         {
             return _this->send_mic_tx((int8_t *)transfer->buffer, transfer->valid_length);
         }
+
         return 0;
-    }  
+    }
 
     void prepareWaveData(const char *path){
 
