@@ -534,27 +534,24 @@ private:
         s_audioBufferCondition.wait(lock, []{ return !s_audioBufferQueue.empty(); });
 
         // Once s_audioBufferQueue is not empty, proceed
-        std::vector<float> audioData = std::move(s_audioBufferQueue.front());
-        s_audioBufferQueue.pop();
+        while (length > 0 && !s_audioBufferQueue.empty()) {
+            // Dequeue a chunk of audio data from the buffer queue
+            std::vector<float> audioData = std::move(s_audioBufferQueue.front());
+            s_audioBufferQueue.pop();
 
-        lock.unlock(); // Unlock before calling interpolate_and_modulate
+            lock.unlock(); // Unlock before calling interpolate_and_modulate
 
-        // Process the audio data in chunks to fill the buffer
-        uint32_t remainingLength = length;
-        uint32_t offset = 0;
+            // Calculate the chunk size based on the minimum of remaining buffer length and audio data size
+            uint32_t chunkSize = std::min(length, (uint32_t)audioData.size());
 
-        while (remainingLength > 0) {
-            uint32_t chunkSize = std::min(remainingLength, (uint32_t)audioData.size());
-            if (chunkSize > 0) {
-                // Interpolate and modulate a chunk of audio data to match the length
-                interpolate_and_modulate(buffer + offset, audioData, chunkSize, 0, sampleRate);
-                offset += chunkSize;
-                remainingLength -= chunkSize;
-            } else {
-                // If the audio data is smaller than the buffer, handle the mismatch
-                std::cerr << "Error: Buffer length exceeds available audio data size." << std::endl;
-                break;
-            }
+            // Interpolate and modulate a chunk of audio data to match the length of the buffer
+            interpolate_and_modulate(buffer, audioData, chunkSize, 0, sampleRate);
+
+            // Update buffer pointer and remaining length
+            buffer += chunkSize;
+            length -= chunkSize;
+
+            lock.lock(); // Lock again before checking for more audio data
         }
 
         std::cout << "Buffer size: " << length << std::endl;
