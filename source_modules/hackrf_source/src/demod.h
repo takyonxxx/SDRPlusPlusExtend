@@ -91,52 +91,58 @@ void modulation(float * input, int8_t * output, uint32_t mode, int hackrf_sample
     }
 }
 
-void interpolate_and_modulate(int8_t* buffer, std::vector<float>& upsampledAudio, uint32_t length, uint32_t mode, int hackrf_sample) {
-
+void interpolate_and_modulate(int8_t* buffer, const std::vector<float>& upsampledAudio, uint32_t length, uint32_t mode, int hackrf_sample)
+{
     // Interpolation
-    float interpolatedBuffer[length / sizeof(float)];
     uint32_t numInterpolatedSamples = length / sizeof(float);
     uint32_t numUpsampledSamples = upsampledAudio.size();
-    uint32_t numIterations = std::min(numInterpolatedSamples, numUpsampledSamples);
+    uint32_t repeatCount = numInterpolatedSamples / numUpsampledSamples;
+    uint32_t index = 0;
 
-    for (uint32_t i = 0; i < numIterations; ++i) {
-        float pos = (float)i * (float)numUpsampledSamples / (float)numInterpolatedSamples;
-        uint32_t index = (uint32_t)pos;
-        float frac = pos - index;
-        interpolatedBuffer[i] = upsampledAudio[index] + (upsampledAudio[index + 1] - upsampledAudio[index]) * frac;
-    }
+    for (uint32_t j = 0; j < repeatCount; ++j) {
+        for (uint32_t i = 0; i < numUpsampledSamples; ++i) {
+            // Interpolate sample
+            float interpolatedSample = upsampledAudio[i];
 
-    // Modulation
-    double fm_deviation = 0.0;
-    float gain = 1.5; // Adjust the gain value as needed
-    double fm_phase = 0.0;
+            // Modulation
+            double fm_deviation = 0.0;
+            float gain = 1.5; // Adjust the gain value as needed
+            double fm_phase = 0.0;
 
-    if (mode == 0) {
-        fm_deviation = 2.0 * M_PI * 75.0e3 / hackrf_sample; // 75 kHz max deviation WBFM
-    } else if (mode == 1) {
-        fm_deviation = 2.0 * M_PI * 5.0e3 / hackrf_sample; // 5 kHz max deviation NBFM
-    }
+            if (mode == 0) {
+                fm_deviation = 2.0 * M_PI * 75.0e3 / hackrf_sample; // 75 kHz max deviation WBFM
+            } else if (mode == 1) {
+                fm_deviation = 2.0 * M_PI * 5.0e3 / hackrf_sample; // 5 kHz max deviation NBFM
+            }
 
-    for (uint32_t i = 0; i < numInterpolatedSamples / 2; ++i) {
-        double audio_amp = interpolatedBuffer[i] * gain;
+            double audio_amp = interpolatedSample * gain;
 
-        // Apply signal conditioning
-        if (audio_amp > 1.0) {
-            audio_amp = 1.0;
-        } else if (audio_amp < -1.0) {
-            audio_amp = -1.0;
+            // Apply signal conditioning
+            if (audio_amp > 1.0) {
+                audio_amp = 1.0;
+            } else if (audio_amp < -1.0) {
+                audio_amp = -1.0;
+            }
+
+            fm_phase += fm_deviation * audio_amp;
+
+            while (fm_phase > (float)(M_PI))
+                fm_phase -= (float)(2.0 * M_PI);
+            while (fm_phase < (float)(-M_PI))
+                fm_phase += (float)(2.0 * M_PI);
+
+            // Ensure index does not exceed buffer length
+            if (index < length) {
+                buffer[index++] = (int8_t)(sin(fm_phase) * 127.0);
+            } else {
+                // Handle buffer overflow
+                std::cerr << "Error: Buffer overflow." << std::endl;
+                return;
+            }
         }
-
-        fm_phase += fm_deviation * audio_amp;
-
-        while (fm_phase > (float)(M_PI))
-            fm_phase -= (float)(2.0 * M_PI);
-        while (fm_phase < (float)(-M_PI))
-            fm_phase += (float)(2.0 * M_PI);
-
-        buffer[i] = (int8_t)(sin(fm_phase) * 127.0);
-        buffer[i + 1] = (int8_t)(cos(fm_phase) * 127.0);
     }
 }
+
+
 
 #endif // DEMOD_H

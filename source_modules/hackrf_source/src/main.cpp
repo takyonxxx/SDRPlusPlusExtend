@@ -284,7 +284,7 @@ private:
     }            
 
     static void start(void* ctx) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
+        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;         
 
         if (_this->running) { return; }
         if (_this->selectedSerial == "") {
@@ -324,7 +324,8 @@ private:
         hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
 
         if(_this->ptt)
-        {           
+        {
+            hackrf_set_baseband_filter_bandwidth(_this->openDev,  _this->sampleRate*0.75);
             hackrf_start_tx(_this->openDev, callback_tx, _this);
         }
         else
@@ -335,7 +336,7 @@ private:
     }
 
     static void stop(void* ctx) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
+        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;       
 
         if (!_this->running) { return; }
 
@@ -527,15 +528,36 @@ private:
     }
 
     int send_mic_tx(int8_t *buffer, uint32_t length) {
+        std::unique_lock<std::mutex> lock(s_audioBufferMutex);
 
-        std::lock_guard<std::mutex> lock(bufferMutex);
+        // Wait until s_audioBufferQueue is not empty
+        s_audioBufferCondition.wait(lock, []{ return !s_audioBufferQueue.empty(); });
 
-        if (!s_audioBufferQueue.empty()) {
-            std::vector<float> audioData = std::move(s_audioBufferQueue.front());
-            s_audioBufferQueue.pop();
-            interpolate_and_modulate(buffer, audioData, audioData.size(), 0, sampleRate);
-            std::cout << "Buffer size: " << audioData.size() << std::endl;
+        // Once s_audioBufferQueue is not empty, proceed
+        std::vector<float> audioData = std::move(s_audioBufferQueue.front());
+        s_audioBufferQueue.pop();
+
+        lock.unlock(); // Unlock before calling interpolate_and_modulate
+
+        // Process the audio data in chunks to fill the buffer
+        uint32_t remainingLength = length;
+        uint32_t offset = 0;
+
+        while (remainingLength > 0) {
+            uint32_t chunkSize = std::min(remainingLength, (uint32_t)audioData.size());
+            if (chunkSize > 0) {
+                // Interpolate and modulate a chunk of audio data to match the length
+                interpolate_and_modulate(buffer + offset, audioData, chunkSize, 0, sampleRate);
+                offset += chunkSize;
+                remainingLength -= chunkSize;
+            } else {
+                // If the audio data is smaller than the buffer, handle the mismatch
+                std::cerr << "Error: Buffer length exceeds available audio data size." << std::endl;
+                break;
+            }
         }
+
+        std::cout << "Buffer size: " << length << std::endl;
 
         return 0;
     }

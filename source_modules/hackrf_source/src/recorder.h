@@ -5,22 +5,29 @@
 #include <portaudio.h>
 #include <vector>
 #include <queue>
+#include <mutex>
+#include <iostream>
 
 static std::queue<std::vector<float>> s_audioBufferQueue;
+static std::mutex s_audioBufferMutex;
+static std::condition_variable s_audioBufferCondition;
 
 class PaRecorder {
 public:
     PaRecorder() : pa_stream(nullptr) {}
     const int NUM_CHANNELS = 1;
-    const int SAMPLE_BLOCK_SIZE = BUF_LEN / 8;
+    const int SAMPLE_BLOCK_SIZE = 1024;
 
-    void initPa() {        
-
+    void initPa() {
         err = Pa_Initialize();
         if (err != paNoError) {
             std::cerr << "PortAudio initialization failed: " << Pa_GetErrorText(err) << std::endl;
             return;
         }
+
+        // Initialize mutex for the buffer queue
+        s_audioBufferMutex.lock();
+        s_audioBufferMutex.unlock();
 
         // Find the default input device index
         PaDeviceIndex inputDevice = Pa_GetDefaultInputDevice();
@@ -40,7 +47,7 @@ public:
 
         // Open stream with input parameters
         err = Pa_OpenStream(&pa_stream, &inputParams, nullptr, AUDIO_SAMPLE_RATE,
-                            SAMPLE_BLOCK_SIZE, paClipOff, audioCallback, &audioBuffer);
+                            SAMPLE_BLOCK_SIZE, paClipOff, audioCallback, this);
         if (err != paNoError) {
             std::cerr << "PortAudio stream opening error: " << Pa_GetErrorText(err) << std::endl;
             Pa_Terminate();
@@ -84,26 +91,6 @@ public:
         std::cout << "PortAudio finished." << std::endl;
     }
 
-    void enqueueAudioData(const std::vector<float>& audioData) {
-        std::lock_guard<std::mutex> lock(bufferMutex);
-        audioBufferQueue.push(audioData);
-    }
-
-    std::vector<float> dequeueAudioData() {
-        std::lock_guard<std::mutex> lock(bufferMutex);
-        if (!audioBufferQueue.empty()) {
-            std::vector<float> audioData = std::move(audioBufferQueue.front());
-            audioBufferQueue.pop();
-            return audioData;
-        } else {
-            return std::vector<float>(); // Return an empty vector if queue is empty
-        }
-    }
-
-    std::vector<float> getAudioBuffer() const {
-        return audioBuffer;
-    }
-
 private:
     static int audioCallback(const void *inputBuffer, void *outputBuffer,
                              unsigned long framesPerBuffer,
@@ -113,17 +100,25 @@ private:
         PaRecorder* recorder = reinterpret_cast<PaRecorder*>(userData);
 
         const float *in = static_cast<const float*>(inputBuffer);
-        recorder->audioBuffer.assign(in, in + framesPerBuffer);
-        s_audioBufferQueue.push(recorder->audioBuffer);
+
+        std::vector<float> audioBuffer(in, in + framesPerBuffer);
+
+        // Lock the buffer queue for thread-safe access
+        std::lock_guard<std::mutex> lock(s_audioBufferMutex);
+        s_audioBufferQueue.push(audioBuffer);
+
+        // Notify waiting threads that new data is available
+        s_audioBufferCondition.notify_one();
+
+//        // Once s_audioBufferQueue is not empty, proceed
+//        std::vector<float> audioData = std::move(s_audioBufferQueue.front());
+//        s_audioBufferQueue.pop();
+//        std::cout << audioData.size() << std::endl;
+
         return paContinue;
     }
 
     PaStream *pa_stream;
     PaError err;
-    std::vector<float> audioBuffer;
-    std::queue<std::vector<float>> audioBufferQueue;
-    std::mutex bufferMutex;
-
 };
-
 #endif // RECORDER_H
