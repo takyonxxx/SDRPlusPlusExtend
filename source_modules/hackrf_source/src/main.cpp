@@ -36,7 +36,6 @@ ConfigManager config;
 
 const char* AGG_MODES_STR = "Off\0Low\0High\0";
 const char* sampleRatesTxt = "20MHz\00016MHz\00010MHz\0008MHz\0005MHz\0004MHz\0002MHz\0001MHz\000";
-TxSendType txSendType = TxSendType::SINWAVE;
 
 const int sampleRates[] = {
     20000000,
@@ -68,6 +67,12 @@ const int bandwidths[] = {
     28000000,
 };
 
+const int txModes[] = {
+    0,
+    1,
+    2,
+};
+
 const char* bandwidthsTxt = "1.75MHz\0"
                             "2.5MHz\0"
                             "3.5MHz\0"
@@ -86,12 +91,15 @@ const char* bandwidthsTxt = "1.75MHz\0"
                             "28MHz\0"
                             "Auto\0";
 
+const char* txModesTxt = "Microphone\0"
+                         "WaveFile\0"
+                         "SinWave\0";
+
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:
     HackRFSourceModule(std::string name) {
         this->name = name;
-        setTxSendType(TxSendType::SINWAVE);
 
         hackrf_init();
 
@@ -116,38 +124,26 @@ public:
         selectBySerial(confSerial);
         sigpath::sourceManager.registerSource("HackRF", &handler);
 
-        if (txSendType == TxSendType::WAV) {
-             std::string marker = "CMakeLists.txt";
-             std::string projectFolder = findProjectFolder(marker);
-             std::string filePath = projectFolder + "/source_modules/hackrf_source/src/input.wav";
-             const char* path = filePath.c_str();
-             prepareWaveData(path);
-        }
-        else if (txSendType == TxSendType::MIC_ONLY)
-        {
-             paRecorder = new PaRecorder();
-             paRecorder->initPa();
-        }
+         std::string marker = "CMakeLists.txt";
+         std::string projectFolder = findProjectFolder(marker);
+         std::string filePath = projectFolder + "/source_modules/hackrf_source/src/input.wav";
+         const char* path = filePath.c_str();
+         prepareWaveData(path);
+
+         paRecorder = new PaRecorder();
+         paRecorder->initPa();
     }
 
     ~HackRFSourceModule() {
         stop(this);
         hackrf_exit();
         sigpath::sourceManager.unregisterSource("HackRF");
-        if (txSendType == TxSendType::MIC_ONLY)
-        {
-             paRecorder->finishPa();
-             delete paRecorder;
-        }
-        else if (txSendType == TxSendType::WAV) {
-            delete[] _iqCache[0];
-            delete[] _iqCache;
-        }
-    }
 
-    void setTxSendType(TxSendType type) {
-        txSendType = type;
-    }
+        paRecorder->finishPa();
+        delete paRecorder;
+        delete[] _iqCache[0];
+        delete[] _iqCache;
+    }   
 
     std::string findProjectFolder(const std::string& marker) {
         fs::path currentDir = fs::current_path();
@@ -230,7 +226,9 @@ public:
             config.conf["devices"][serial]["lnaGain"] = 40;
             config.conf["devices"][serial]["vgaGain"] = 40;
             config.conf["devices"][serial]["txVgaGain"] = 47;        
-            config.conf["devices"][serial]["bandwidth"] = 16;            
+            config.conf["devices"][serial]["bandwidth"] = 16;
+            config.conf["devices"][serial]["txSendType"] = 2;
+
         }
         config.release(created);
 
@@ -276,7 +274,10 @@ public:
         if (config.conf["devices"][serial].contains("bandwidth")) {
             bwId = config.conf["devices"][serial]["bandwidth"];
             bwId = std::clamp<int>(bwId, 0, 16);
-        }       
+        }
+        if (config.conf["devices"][serial].contains("txSendType")) {
+            txSendType = config.conf["devices"][serial]["txSendType"];
+        }
 
         selectedSerial = serial;
     }
@@ -321,10 +322,10 @@ private:
         if(_this->ptt)
         {           
             _this->biasT = true;
-            if (txSendType == TxSendType::MIC_ONLY)
-            {
-                _this->paRecorder->startPaCallback();
-            }
+            // if (_this->txSendType == 0)
+            // {
+            //     _this->paRecorder->startPaCallback();
+            // }
         }
         else
         {
@@ -364,10 +365,10 @@ private:
         if(_this->ptt)
         {            
             hackrf_stop_tx(_this->openDev);
-            if (txSendType == TxSendType::MIC_ONLY)
-            {
-                _this->paRecorder->stopPaCallback();
-            }
+            // if (_this->txSendType == 0)
+            // {
+            //     _this->paRecorder->stopPaCallback();
+            // }
         }
         else
             hackrf_stop_rx(_this->openDev);
@@ -454,6 +455,13 @@ private:
             }
             config.acquire();
             config.conf["devices"][_this->selectedSerial]["bandwidth"] = _this->bwId;
+            config.release(true);
+        }
+        SmGui::LeftLabel("Tx Mode");
+        SmGui::FillWidth();
+        if (SmGui::Combo(CONCAT("##_hackrf_tx_mod_", _this->name), &_this->txSendType, txModesTxt)) {
+            config.acquire();
+            config.conf["devices"][_this->selectedSerial]["txSendType"] = _this->txSendType;
             config.release(true);
         }
 
@@ -583,11 +591,12 @@ private:
 
         modulationIndex = 5.0;
         amplitudeScalingFactor = 1.5;
+        double frequency = 730.0;
 
         for (int sampleIndex = 0; sampleIndex < length / 2; sampleIndex++) {
             // Calculate time in seconds
             double time = (current_tx_sample + sampleIndex) / static_cast<double>(sampleRate);
-            double audioSignal = sin(2 * M_PI * 720 * time);
+            double audioSignal = sin(2 * M_PI * frequency * time);
             double modulatedPhase = 2 * M_PI * freq * time + modulationIndex * audioSignal;
             double inPhaseComponent = cos(modulatedPhase) * amplitudeScalingFactor;
             double quadratureComponent = sin(modulatedPhase) * amplitudeScalingFactor;
@@ -600,21 +609,22 @@ private:
     }
 
     static int callback_tx(hackrf_transfer* transfer) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        if (txSendType == TxSendType::WAV)
+        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;        
+
+        if (_this->txSendType == 0)
+        {
+            // return _this->send_mic_tx((int8_t *)transfer->buffer, transfer->valid_length);
+        }
+        else if (_this->txSendType == 1)
         {
             if(_this->_iqCache)
             {
                 return _this->send_wav_tx((int8_t *)transfer->buffer, transfer->valid_length);
             }
         }
-        else if (txSendType == TxSendType::SINWAVE)
+        else if (_this->txSendType == 2)
         {
             return _this->send_sin_wave_tx((int8_t *)transfer->buffer, transfer->valid_length);
-        }
-        else if (txSendType == TxSendType::MIC_ONLY)
-        {
-            return _this->send_mic_tx((int8_t *)transfer->buffer, transfer->valid_length);
         }
 
         return 0;
@@ -697,6 +707,7 @@ private:
     float vga = 0;
     float tx_vga = 0;
     int current_tx_sample = 0;
+    int txSendType = 0;
 
     // for wav file
     int _audioSampleRate=0;
