@@ -1,4 +1,7 @@
+#ifndef WAVREADER_H
+#define WAVREADER_H
 #include "constants.h"
+#include "demod.h"
 
 typedef struct _WaveHeader_t
 {
@@ -138,3 +141,4 @@ void printHeaderInfo(WaveHeader hdr)
     printf("	Data ID: %s\n", buf);
     printf("	Data Size: %d\n", hdr.dataSize);
 }
+#endif // WAVREADER_H
