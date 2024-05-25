@@ -41,6 +41,14 @@
 //        return max_size;
 //    }
 
+//    size_t getMaxSize() const {
+//        return max_size;
+//    }
+
+//    void setMaxSize(size_t size) {
+//        max_size = size;
+//    }
+
 //public:
 //    std::queue<uint8_t> buffer_;
 //    size_t max_size;
