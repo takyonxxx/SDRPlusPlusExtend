@@ -5,8 +5,6 @@ file(GLOB SRC "src/*.cpp")
 
 include(${SDRPP_MODULE_CMAKE})
 
-find_package(Qt6 REQUIRED COMPONENTS Core Multimedia)
-
 target_sources(hackrf_source
   PRIVATE
     src/constants.h
@@ -47,4 +45,3 @@ else (MSVC)
     target_link_libraries(hackrf_source PRIVATE ${PORTAUDIO_LIBRARIES})
 endif ()
 
-target_link_libraries(hackrf_source PRIVATE Qt6::Core Qt6::Multimedia)
