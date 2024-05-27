@@ -130,5 +130,27 @@ void stopMicThread() {
     stop_flag.store(true, std::memory_order_release); // Set the stop flag
 }
 
+constexpr double PI = 3.141592653589793;
+
+class LowPassFilter {
+private:
+    double alpha;
+    double y_prev;
+
+public:
+    LowPassFilter(double sampleRate, double cutoffFreq) {
+        double dt = 1.0 / sampleRate;
+        double RC = 1.0 / (2 * PI * cutoffFreq);
+        alpha = dt / (RC + dt);
+        y_prev = 0.0;
+    }
+
+    double filter(double x) {
+        double y = alpha * x + (1 - alpha) * y_prev;
+        y_prev = y;
+        return y;
+    }
+};
+
 #endif // HACKRFSOURCEMODULE_H
 

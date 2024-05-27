@@ -480,54 +480,47 @@ private:
         return 0;
     }
 
-    void apply_modulation_to_circular_buffer(std::vector<uint8_t>& buffer, uint32_t length) {
+    void apply_modulation(int8_t* buffer, uint32_t length) {
         double modulationIndex = 5.0;
-        double amplitudeScalingFactor = 1.5;
+        double amplitudeScalingFactor = 2.0;
         double frequency = 440.0;
+        double cutoffFreq = 150.0;
+        double oldSampleRate = sampleRate;
+        double newSampleRate = 2 * sampleRate;
+        double resampleRatio = oldSampleRate / newSampleRate;
+
+        LowPassFilter filter(oldSampleRate, cutoffFreq);
 
         for (uint32_t sampleIndex = 0; sampleIndex < length; sampleIndex += 2) {
-            double time = (current_tx_sample + sampleIndex / 2) / static_cast<double>(sampleRate);
-            double audioSignal = (static_cast<double>(buffer[sampleIndex]) / 127.0) - 1.0;
-//            double audioSignal = sin(2 * M_PI * frequency * time);
-            double modulatedPhase = 2 * M_PI * time + modulationIndex * audioSignal;
+            // Calculate time
+            double time = (current_tx_sample + sampleIndex / 2) / oldSampleRate;
+            double interpolatedTime = time * resampleRatio;
+            double audioSignal = sin(2 * M_PI * frequency * time);
+
+            // std::vector<uint8_t> audioData;
+            // {
+            //     std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
+            //     circular_buffer.data_available_.wait(lock, [&] {
+            //         return circular_buffer.buffer_.size() - circular_buffer.tail_ >= 1;
+            //     });
+            //     audioData.push_back(circular_buffer.buffer_[circular_buffer.tail_]);
+            //     circular_buffer.tail_ = (circular_buffer.tail_ + 1) % circular_buffer.buffer_.size();
+            // }
+            // double audioSignal = (static_cast<double>(audioData[0]) / 127.0) - 1.0;
+
+            double filteredAudioSignal = filter.filter(audioSignal);
+            double modulatedPhase = 2 * PI * interpolatedTime + modulationIndex * filteredAudioSignal;
             double inPhaseComponent = cos(modulatedPhase) * amplitudeScalingFactor;
             double quadratureComponent = sin(modulatedPhase) * amplitudeScalingFactor;
-            buffer[sampleIndex] = static_cast<uint8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
-            buffer[sampleIndex + 1] = static_cast<uint8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
+            buffer[sampleIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
+            buffer[sampleIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
         }
+
         current_tx_sample += length / 2;
-    }   
+    }
 
-    int send_mic_tx(int8_t *buffer, uint32_t length) {
-        auto start = std::chrono::high_resolution_clock::now();
-
-        std::vector<uint8_t> buffer_mic(length);
-        {
-            std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
-            circular_buffer.data_available_.wait(lock, [&] {
-                return circular_buffer.buffer_.size() - circular_buffer.tail_ >= length;
-            });
-            for (uint32_t i = 0; i < length; ++i) {
-                buffer_mic[i] = circular_buffer.buffer_[(circular_buffer.tail_ + i) % circular_buffer.buffer_.size()];
-            }
-            circular_buffer.tail_ = (circular_buffer.tail_ + length) % circular_buffer.buffer_.size();
-        }
-
-        if (buffer_mic.size() < length) {
-            std::fill(buffer_mic.begin() + buffer_mic.size(), buffer_mic.begin() + length, 0xFF);
-        }
-
-        apply_modulation_to_circular_buffer(buffer_mic, buffer_mic.size());
-        std::copy(buffer_mic.begin(), buffer_mic.end(), buffer);
-
-        auto end_copy = std::chrono::high_resolution_clock::now();
-        auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_copy - start);
-
-        // std::cout << "Microphone buffer size: " << buffer_mic.size() << " bytes" << std::endl;
-        std::cout << std::fixed << std::setprecision(3);
-        std::cout << "Total time: " << total_duration.count() / 1e6 << " seconds" << std::endl;
-
-
+    int send_mic_tx(int8_t* buffer, uint32_t length) {
+        apply_modulation(buffer, length);
         return 0;
     }
 
