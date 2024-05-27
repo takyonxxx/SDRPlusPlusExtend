@@ -40,10 +40,10 @@ public:
         const char* path = filePath.c_str();
         prepareWaveData(path);
 
-//        micReader = new MicReader(circular_buffer);
-//        if (!micReader->init()) {
-//            std::cerr << "Error initializing MicReader!" << std::endl;
-//        }
+        micReader = new MicReader(circular_buffer);
+        if (!micReader->init()) {
+           std::cerr << "Error initializing MicReader!" << std::endl;
+        }
     }
 
     ~HackRFSourceModule() {
@@ -247,8 +247,8 @@ private:
             _this->biasT = true;
              if (_this->txSendType == 0)
              {
-//                _this->startRecording();
-                _this->mic_thread = std::thread(generateMicData, std::ref(_this->circular_buffer), _this->sampleRate);
+                _this->startRecording();
+                // _this->mic_thread = std::thread(generateMicData, std::ref(_this->circular_buffer), _this->sampleRate);
              }
         }
         else
@@ -289,10 +289,10 @@ private:
         if(_this->ptt)
         {
             hackrf_stop_tx(_this->openDev);
-//            _this->stopRecording();
-            stopMicThread();
-            if(_this->mic_thread.joinable())
-                _this->mic_thread.join();
+            _this->stopRecording();
+            // stopMicThread();
+            // if(_this->mic_thread.joinable())
+            //     _this->mic_thread.join();
         }
         else
             hackrf_stop_rx(_this->openDev);
@@ -483,6 +483,7 @@ private:
     void apply_modulation_to_circular_buffer(std::vector<uint8_t>& buffer, uint32_t length) {
         double modulationIndex = 5.0;
         double amplitudeScalingFactor = 1.5;
+        double frequency = 440.0;
 
         for (uint32_t sampleIndex = 0; sampleIndex < length; sampleIndex += 2) {
             double time = (current_tx_sample + sampleIndex / 2) / static_cast<double>(sampleRate);
@@ -495,9 +496,10 @@ private:
             buffer[sampleIndex + 1] = static_cast<uint8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
         }
         current_tx_sample += length / 2;
-    }
+    }   
 
     int send_mic_tx(int8_t *buffer, uint32_t length) {
+        auto start = std::chrono::high_resolution_clock::now();
 
         std::vector<uint8_t> buffer_mic(length);
         {
@@ -510,12 +512,22 @@ private:
             }
             circular_buffer.tail_ = (circular_buffer.tail_ + length) % circular_buffer.buffer_.size();
         }
+
         if (buffer_mic.size() < length) {
             std::fill(buffer_mic.begin() + buffer_mic.size(), buffer_mic.begin() + length, 0xFF);
         }
-        std::cout << "Microphone buffer size: " << buffer_mic.size() << " bytes" << std::endl;
-        apply_modulation_to_circular_buffer(buffer_mic, length);
+
+        apply_modulation_to_circular_buffer(buffer_mic, buffer_mic.size());
         std::copy(buffer_mic.begin(), buffer_mic.end(), buffer);
+
+        auto end_copy = std::chrono::high_resolution_clock::now();
+        auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_copy - start);
+
+        // std::cout << "Microphone buffer size: " << buffer_mic.size() << " bytes" << std::endl;
+        std::cout << std::fixed << std::setprecision(3);
+        std::cout << "Total time: " << total_duration.count() / 1e6 << " seconds" << std::endl;
+
+
         return 0;
     }
 

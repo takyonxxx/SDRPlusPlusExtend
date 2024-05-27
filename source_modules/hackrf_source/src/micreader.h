@@ -82,7 +82,7 @@ private:
     CircularBuffer& circular_buffer_;
 
     static const int SAMPLE_RATE = 44100;
-    static const int FRAMES_PER_BUFFER = 1024 * 8;
+    static const int FRAMES_PER_BUFFER = 1024;
 
     static int paCallback(const void* inputBuffer, void* outputBuffer,
                           unsigned long framesPerBuffer,
@@ -95,7 +95,6 @@ private:
         std::vector<uint8_t> micData(bufferSize);
         memcpy(micData.data(), micBuffer, bufferSize);
         micReader->circular_buffer_.write(micData);
-        std::cout << "pa size : " << micReader->circular_buffer_.size() << std::endl;
         return paContinue;
     }
 };
