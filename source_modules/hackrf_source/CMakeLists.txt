@@ -12,6 +12,7 @@ target_sources(hackrf_source
     src/hackrfsourcemodule.h
     src/wavreader.h
     src/demod.h
+    src/micreader.h
 )
 
 if (MSVC)
@@ -44,4 +45,3 @@ else (MSVC)
     target_link_directories(hackrf_source PRIVATE ${PORTAUDIO_LIBRARY_DIRS})
     target_link_libraries(hackrf_source PRIVATE ${PORTAUDIO_LIBRARIES})
 endif ()
-

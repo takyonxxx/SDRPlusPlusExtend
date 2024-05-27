@@ -107,30 +107,22 @@ const int txModes[] = {
 
 const char* txModesTxt = "Microphone\0"
                          "Wave File\0";
-#include <portaudio.h>
 
 std::atomic<bool> stop_flag(false);
 void generateMicData(CircularBuffer& circular_buffer, int sampleRate) {
     double frequency = 730.0;
     double time_interval = 1.0 / static_cast<double>(sampleRate);
     double current_time = 0.0;
-//    const size_t bufferSize = circular_buffer.capacity();
-//    std::vector<float> audioBuffer(bufferSize);
-//    std::vector<uint8_t> uint8_audioBuffer(bufferSize);
-
     std::vector<uint8_t> data(circular_buffer.capacity());
 
     while (!stop_flag.load(std::memory_order_acquire)) {
         for (size_t i = 0; i < circular_buffer.capacity(); ++i) {
-//            uint8_t sample_byte = static_cast<uint8_t>((audioBuffer[i] + 1.0) * 127.0);
-//            uint8_audioBuffer[i] = sample_byte;
             double audioSignal = sin(2 * M_PI * frequency * current_time);
             uint8_t sample_byte = static_cast<uint8_t>((audioSignal + 1.0) * 127.0);
             data[i] = sample_byte;
             current_time += time_interval;
         }
         circular_buffer.write(data);
-//        std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 }
 

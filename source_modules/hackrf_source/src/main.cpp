@@ -1,6 +1,7 @@
 #include "hackrfsourcemodule.h"
 #include "constants.h"
 #include "wavreader.h"
+#include "micreader.h"
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:
@@ -38,14 +39,33 @@ public:
         std::string filePath = projectFolder + "/source_modules/hackrf_source/src/input.wav";
         const char* path = filePath.c_str();
         prepareWaveData(path);
+
+//        micReader = new MicReader(circular_buffer);
+//        if (!micReader->init()) {
+//            std::cerr << "Error initializing MicReader!" << std::endl;
+//        }
     }
 
     ~HackRFSourceModule() {
+//        stopRecording();
+//        micReader->finish();
         stop(this);
         hackrf_exit();
         sigpath::sourceManager.unregisterSource("HackRF");
+
+//        delete micReader;
         delete[] _iqCache[0];
         delete[] _iqCache;
+    }
+
+    void startRecording() {
+        if (!micReader->startRecord()) {
+            std::cerr << "Error starting recording!" << std::endl;
+        }
+    }
+
+    void stopRecording() {
+        micReader->stopRecord();
     }
 
     std::string findProjectFolder(const std::string& marker) {
@@ -227,8 +247,8 @@ private:
             _this->biasT = true;
              if (_this->txSendType == 0)
              {
+//                _this->startRecording();
                 _this->mic_thread = std::thread(generateMicData, std::ref(_this->circular_buffer), _this->sampleRate);
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
              }
         }
         else
@@ -267,11 +287,12 @@ private:
         _this->stream.stopWriter();
 
         if(_this->ptt)
-        {            
+        {
+            hackrf_stop_tx(_this->openDev);
+//            _this->stopRecording();
             stopMicThread();
             if(_this->mic_thread.joinable())
                 _this->mic_thread.join();
-            hackrf_stop_tx(_this->openDev);
         }
         else
             hackrf_stop_rx(_this->openDev);
@@ -477,6 +498,7 @@ private:
     }
 
     int send_mic_tx(int8_t *buffer, uint32_t length) {
+
         std::vector<uint8_t> buffer_mic(length);
         {
             std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
@@ -491,6 +513,7 @@ private:
         if (buffer_mic.size() < length) {
             std::fill(buffer_mic.begin() + buffer_mic.size(), buffer_mic.begin() + length, 0xFF);
         }
+        std::cout << "Microphone buffer size: " << buffer_mic.size() << " bytes" << std::endl;
         apply_modulation_to_circular_buffer(buffer_mic, length);
         std::copy(buffer_mic.begin(), buffer_mic.end(), buffer);
         return 0;
@@ -618,6 +641,7 @@ private:
 private:
     CircularBuffer circular_buffer;
     std::thread mic_thread;
+    MicReader *micReader;
 };
 
 MOD_EXPORT void _INIT_() {
