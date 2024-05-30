@@ -480,47 +480,50 @@ private:
         return 0;
     }
 
-    void apply_modulation(int8_t* buffer, uint32_t length) {
-        double modulationIndex = 5.0;
-        double amplitudeScalingFactor = 2.0;
-        double frequency = 440.0;
-        double cutoffFreq = 150.0;
-        double oldSampleRate = sampleRate;
-        double newSampleRate = 2 * sampleRate;
-        double resampleRatio = oldSampleRate / newSampleRate;
+    void apply_modulation_resapmler(int8_t* buffer, uint32_t length) {
 
-        LowPassFilter filter(oldSampleRate, cutoffFreq);
+        double modulationIndex = 5.0;
+        double amplitudeScalingFactor = 1.5;
+        double cutoffFreq = 150.0;
+        double hackrf_sample_rate = sampleRate;
+        double newSampleRate = sampleRate / 50.0;
+        double resampleRatio = sampleRate / newSampleRate;
+
+        LowPassFilter filter(hackrf_sample_rate, cutoffFreq);
+
+        std::vector<uint8_t> mic_buffer;
+        while (mic_buffer.size() < length / 2) {
+            std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
+            circular_buffer.data_available_.wait(lock, [&] {
+                return circular_buffer.buffer_.size() - circular_buffer.tail_ >= 1;
+            });
+
+            size_t remainingSpace = (length / 2) - mic_buffer.size();
+            size_t samplesToCopy = std::min(remainingSpace, circular_buffer.buffer_.size() - circular_buffer.tail_);
+            mic_buffer.insert(mic_buffer.end(), circular_buffer.buffer_.begin() + circular_buffer.tail_,
+                              circular_buffer.buffer_.begin() + circular_buffer.tail_ + samplesToCopy);
+            circular_buffer.tail_ = (circular_buffer.tail_ + samplesToCopy) % circular_buffer.buffer_.size();
+        }
 
         for (uint32_t sampleIndex = 0; sampleIndex < length; sampleIndex += 2) {
-            // Calculate time
-            double time = (current_tx_sample + sampleIndex / 2) / oldSampleRate;
-            double interpolatedTime = time * resampleRatio;
-            double audioSignal = sin(2 * M_PI * frequency * time);
-
-            // std::vector<uint8_t> audioData;
-            // {
-            //     std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
-            //     circular_buffer.data_available_.wait(lock, [&] {
-            //         return circular_buffer.buffer_.size() - circular_buffer.tail_ >= 1;
-            //     });
-            //     audioData.push_back(circular_buffer.buffer_[circular_buffer.tail_]);
-            //     circular_buffer.tail_ = (circular_buffer.tail_ + 1) % circular_buffer.buffer_.size();
-            // }
-            // double audioSignal = (static_cast<double>(audioData[0]) / 127.0) - 1.0;
-
+            double time = (current_tx_sample + sampleIndex / 2) / hackrf_sample_rate;
+            double audioSignal = sin(2 * M_PI * 440 * time);
+//            auto sample = mic_buffer[sampleIndex / 2];
+//            double audioSignal = (static_cast<double>(sample * 2.5) / 127.0) - 1.0;
             double filteredAudioSignal = filter.filter(audioSignal);
-            double modulatedPhase = 2 * PI * interpolatedTime + modulationIndex * filteredAudioSignal;
+            double modulatedPhase = 2 * M_PI * time + modulationIndex * filteredAudioSignal;
             double inPhaseComponent = cos(modulatedPhase) * amplitudeScalingFactor;
             double quadratureComponent = sin(modulatedPhase) * amplitudeScalingFactor;
             buffer[sampleIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
             buffer[sampleIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
         }
 
+//        std::cout << mic_buffer.size() << " "<< length << std::endl;
         current_tx_sample += length / 2;
     }
 
     int send_mic_tx(int8_t* buffer, uint32_t length) {
-        apply_modulation(buffer, length);
+        apply_modulation_resapmler(buffer, length);
         return 0;
     }
 

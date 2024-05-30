@@ -5,57 +5,6 @@
 #include <queue>
 #include <condition_variable>
 
-//class CircularBuffer {
-//public:
-//    CircularBuffer(size_t size) : max_size(size) {}
-
-//    void write(const std::vector<uint8_t>& data) {
-//        std::unique_lock<std::mutex> lock(mutex_);
-//        for (auto byte : data) {
-//            if (buffer_.size() >= max_size) {
-//                buffer_.pop();
-//            }
-//            buffer_.push(byte);
-//        }
-//        data_available_.notify_all();
-//    }
-
-//    void read(std::vector<uint8_t>& data, size_t length) {
-//        std::unique_lock<std::mutex> lock(mutex_);
-//        data_available_.wait(lock, [&] {
-//            return buffer_.size() >= length;
-//        });
-
-//        for (size_t i = 0; i < length; ++i) {
-//            data[i] = buffer_.front();
-//            buffer_.pop();
-//        }
-//    }
-
-//    size_t size() const {
-//        std::unique_lock<std::mutex> lock(mutex_);
-//        return buffer_.size();
-//    }
-
-//    size_t capacity() const {
-//        return max_size;
-//    }
-
-//    size_t getMaxSize() const {
-//        return max_size;
-//    }
-
-//    void setMaxSize(size_t size) {
-//        max_size = size;
-//    }
-
-//public:
-//    std::queue<uint8_t> buffer_;
-//    size_t max_size;
-//    mutable std::mutex mutex_;
-//    std::condition_variable data_available_;
-//};
-
 class CircularBuffer {
 public:
     CircularBuffer(size_t size) : buffer_(size), head_(0), tail_(0), full_(false) {}

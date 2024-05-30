@@ -82,7 +82,7 @@ private:
     CircularBuffer& circular_buffer_;
 
     static const int SAMPLE_RATE = 44100;
-    static const int FRAMES_PER_BUFFER = 1024 * 2;
+    static const int FRAMES_PER_BUFFER = 512;
 
     static int paCallback(const void* inputBuffer, void* outputBuffer,
                           unsigned long framesPerBuffer,
