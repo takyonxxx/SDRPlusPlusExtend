@@ -120,8 +120,12 @@ else()
     find_package(PkgConfig)
     find_package(OpenGL REQUIRED)
 
+    find_package(Volk REQUIRED CONFIG)
+    target_include_directories(sdrpp_core PUBLIC ${VOLK_INCLUDE_DIRS})
+    target_link_libraries(sdrpp_core PUBLIC Volk::volk)
+
     pkg_check_modules(FFTW3 REQUIRED fftw3f)
-    pkg_check_modules(VOLK REQUIRED volk)
+    # pkg_check_modules(VOLK REQUIRED volk)
     pkg_check_modules(GLFW3 REQUIRED glfw3)
     pkg_check_modules(LIBZSTD REQUIRED libzstd)
 
@@ -129,7 +133,7 @@ else()
         ${OPENGL_INCLUDE_DIRS}
         ${FFTW3_INCLUDE_DIRS}
         ${GLFW3_INCLUDE_DIRS}
-        ${VOLK_INCLUDE_DIRS}
+        # ${VOLK_INCLUDE_DIRS}
         ${LIBZSTD_INCLUDE_DIRS}
     )
     
@@ -137,7 +141,7 @@ else()
         ${OPENGL_LIBRARY_DIRS}
         ${FFTW3_LIBRARY_DIRS}
         ${GLFW3_LIBRARY_DIRS}
-        ${VOLK_LIBRARY_DIRS}
+        # ${VOLK_LIBRARY_DIRS}
         ${LIBZSTD_LIBRARY_DIRS}
     )
 
@@ -145,7 +149,7 @@ else()
         ${OPENGL_LIBRARIES}
         ${FFTW3_LIBRARIES}
         ${GLFW3_LIBRARIES}
-        ${VOLK_LIBRARIES}
+        # ${VOLK_LIBRARIES}
         ${LIBZSTD_LIBRARIES}
     )
 

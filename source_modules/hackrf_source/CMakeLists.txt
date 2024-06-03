@@ -44,4 +44,5 @@ else (MSVC)
     target_include_directories(hackrf_source PRIVATE ${PORTAUDIO_INCLUDE_DIRS})
     target_link_directories(hackrf_source PRIVATE ${PORTAUDIO_LIBRARY_DIRS})
     target_link_libraries(hackrf_source PRIVATE ${PORTAUDIO_LIBRARIES})
+
 endif ()

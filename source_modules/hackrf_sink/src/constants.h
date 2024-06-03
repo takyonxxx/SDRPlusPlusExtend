@@ -1,16 +1,19 @@
-#ifndef HACKRFSOURCEMODULE_H
-#define HACKRFSOURCEMODULE_H
-
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <iostream>
-#include <string>
+#include <iomanip>
 #include <vector>
 #include <mutex>
+#include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
 #include <cmath>
-#include <thread>
 #include <atomic>
 #include <chrono>
 #include <random>
@@ -25,7 +28,7 @@
 #include <config.h>
 #include <gui/widgets/stepped_slider.h>
 #include <gui/smgui.h>
-#include "circular_buffer.h"
+
 
 #ifndef __ANDROID__
 #include <libhackrf/hackrf.h>
@@ -34,15 +37,21 @@
 #include <hackrf.h>
 #endif
 
+#define DEBUG 1
+#define BUF_LEN 262144   //hackrf tx buf
+#define BYTES_PER_SAMPLE 2
+#define CARRIER_FREQUENCY 100e6
+#define DEVIATION 75e3
+#define AUDIO_SAMPLE_RATE 44100
 
 namespace fs = std::filesystem;
 
 #define CONCAT(a, b) ((std::string(a) + b).c_str())
 
 SDRPP_MOD_INFO{
-    /* Name:            */ "hackrf_source",
-    /* Description:     */ "HackRF source module for SDR++",
-    /* Author:          */ "Ryzerth",
+    /* Name:            */ "hackrf_sink",
+    /* Description:     */ "HackRF sink module for SDR++",
+    /* Author:          */ "Türkay Biliyor",
     /* Version:         */ 0, 1, 0,
     /* Max instances    */ 1
 };
@@ -100,34 +109,4 @@ const char* bandwidthsTxt = "1.75MHz\0"
                             "28MHz\0"
                             "Auto\0";
 
-const int txModes[] = {
-    0,
-    1,
-};
-
-const char* txModesTxt = "Microphone\0"
-                         "Wave File\0";
-
-
-class LowPassFilter {
-private:
-    double alpha;
-    double y_prev;
-
-public:
-    LowPassFilter(double sampleRate, double cutoffFreq) {
-        double dt = 1.0 / sampleRate;
-        double RC = 1.0 / (2 * M_PI * cutoffFreq);
-        alpha = dt / (RC + dt);
-        y_prev = 0.0;
-    }
-
-    double filter(double x) {
-        double y = alpha * x + (1 - alpha) * y_prev;
-        y_prev = y;
-        return y;
-    }
-};
-
-#endif // HACKRFSOURCEMODULE_H
-
+#endif // CONSTANTS_H

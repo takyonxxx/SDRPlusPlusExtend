@@ -13,10 +13,6 @@ public:
 
         hackrf_init();
 
-        // Select the last samplerate option
-        sampleRate = 2000000;
-        srId = 7;
-
         handler.ctx = this;
         handler.selectHandler = menuSelected;
         handler.deselectHandler = menuDeselected;
