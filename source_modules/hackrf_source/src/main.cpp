@@ -14,7 +14,7 @@ public:
         hackrf_init();
 
         // Select the last samplerate option
-        sampleRate = 1000000;
+        sampleRate = 2000000;
         srId = 7;
 
         handler.ctx = this;
@@ -42,7 +42,7 @@ public:
 
         micReader = new MicReader(circular_buffer);
         if (!micReader->init()) {
-           std::cerr << "Error initializing MicReader!" << std::endl;
+            std::cerr << "Error initializing MicReader!" << std::endl;
         }
     }
 
@@ -146,7 +146,7 @@ public:
         bool created = false;
         config.acquire();
         if (!config.conf["devices"].contains(serial)) {
-            config.conf["devices"][serial]["sampleRate"] = 1000000;
+            config.conf["devices"][serial]["sampleRate"] = 2000000;
             config.conf["devices"][serial]["biasT"] = false;
             config.conf["devices"][serial]["amp"] = false;
             config.conf["devices"][serial]["ptt"] = false;
@@ -161,7 +161,7 @@ public:
 
         // Set default values
         srId = 0;
-        sampleRate = 1000000;
+        sampleRate = 2000000;
         biasT = false;
         amp = false;
         ptt = false;
@@ -249,10 +249,10 @@ private:
         if(_this->ptt)
         {
             _this->biasT = true;
-//             if (_this->txSendType == 0)
-//             {
-//                _this->startRecording();
-//             }
+            if (_this->txSendType == 0)
+            {
+                _this->startRecording();
+            }
         }
         else
         {
@@ -292,7 +292,10 @@ private:
         if(_this->ptt)
         {
             hackrf_stop_tx(_this->openDev);
-//            _this->stopRecording();
+            if (_this->txSendType == 0)
+            {
+                _this->stopRecording();
+            }
         }
         else
             hackrf_stop_rx(_this->openDev);
@@ -491,26 +494,25 @@ private:
 
         LowPassFilter filter(hackrf_sample_rate, cutoffFreq);
 
-        std::vector<uint8_t> mic_buffer;
-        mic_buffer = micReader->getInstantMicBuffer(1024);
-//        while (mic_buffer.size() < length / 2) {
-//            std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
-//            circular_buffer.data_available_.wait(lock, [&] {
-//                return circular_buffer.buffer_.size() - circular_buffer.tail_ >= 1;
-//            });
+        std::vector<uint8_t> mic_buffer;       
+        while (mic_buffer.size() < length / 2) {
+            std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
+            circular_buffer.data_available_.wait(lock, [&] {
+                return circular_buffer.buffer_.size() - circular_buffer.tail_ >= 1;
+            });
 
-//            size_t remainingSpace = (length / 2) - mic_buffer.size();
-//            size_t samplesToCopy = std::min(remainingSpace, circular_buffer.buffer_.size() - circular_buffer.tail_);
-//            mic_buffer.insert(mic_buffer.end(), circular_buffer.buffer_.begin() + circular_buffer.tail_,
-//                              circular_buffer.buffer_.begin() + circular_buffer.tail_ + samplesToCopy);
-//            circular_buffer.tail_ = (circular_buffer.tail_ + samplesToCopy) % circular_buffer.buffer_.size();
-//        }
+            size_t remainingSpace = (length / 2) - mic_buffer.size();
+            size_t samplesToCopy = std::min(remainingSpace, circular_buffer.buffer_.size() - circular_buffer.tail_);
+            mic_buffer.insert(mic_buffer.end(), circular_buffer.buffer_.begin() + circular_buffer.tail_,
+                              circular_buffer.buffer_.begin() + circular_buffer.tail_ + samplesToCopy);
+            circular_buffer.tail_ = (circular_buffer.tail_ + samplesToCopy) % circular_buffer.buffer_.size();
+        }
 
         for (uint32_t sampleIndex = 0; sampleIndex < length; sampleIndex += 2) {
             double time = (current_tx_sample + sampleIndex / 2) / hackrf_sample_rate;
-            double audioSignal = sin(2 * M_PI * 440 * time);
-//            auto sample = mic_buffer[sampleIndex / 2];
-//            double audioSignal = (static_cast<double>(sample * 2.5) / 127.0) - 1.0;
+            // double audioSignal = sin(2 * M_PI * 440 * time);
+            auto sample = mic_buffer[sampleIndex / 2];
+            double audioSignal = (static_cast<double>(sample * 2.5) / 127.0) - 1.0;
             double filteredAudioSignal = filter.filter(audioSignal);
             double modulatedPhase = 2 * M_PI * time + modulationIndex * filteredAudioSignal;
             double inPhaseComponent = cos(modulatedPhase) * amplitudeScalingFactor;
@@ -518,8 +520,7 @@ private:
             buffer[sampleIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
             buffer[sampleIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
         }
-
-//        std::cout << mic_buffer.size() << " "<< length << std::endl;
+        std::cout << mic_buffer.size() << " "<< length << std::endl;
         current_tx_sample += length / 2;
     }
 

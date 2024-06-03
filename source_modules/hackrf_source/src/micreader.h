@@ -41,7 +41,6 @@ public:
             Pa_Terminate();
             return false;
         }
-
         return true;
     }
 
@@ -61,13 +60,14 @@ public:
 
     void stopRecord() {
         if (stream) {
-            Pa_StopStream(stream);            
+            Pa_StopStream(stream);
         }
         std::cout << "PortAudio record stopped." << std::endl;
         isRecording = false;
     }
 
     void finish(){
+
         if (stream) {
             Pa_CloseStream(stream);
             Pa_Terminate();
@@ -80,18 +80,13 @@ public:
         std::vector<float> floatBuffer(numFrames);
         std::vector<uint8_t> byteBuffer(size);
 
-        if (!isRecording) {
-            err = Pa_ReadStream(stream, floatBuffer.data(), numFrames);
-            if (err != paNoError) {
-                std::cerr << "PortAudio read error: " << Pa_GetErrorText(err) << std::endl;
-                byteBuffer.clear();
-                return byteBuffer;
-            }
-            memcpy(byteBuffer.data(), floatBuffer.data(), size);
-        } else {
-            std::cerr << "Stream is recording. First stop record." << std::endl;
+        err = Pa_ReadStream(stream, floatBuffer.data(), numFrames);
+        if (err != paNoError) {
+            std::cerr << "PortAudio read error: " << Pa_GetErrorText(err) << std::endl;
             byteBuffer.clear();
+            return byteBuffer;
         }
+        memcpy(byteBuffer.data(), floatBuffer.data(), size);
 
         return byteBuffer;
     }
