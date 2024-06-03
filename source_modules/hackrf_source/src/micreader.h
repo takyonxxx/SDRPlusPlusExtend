@@ -75,6 +75,27 @@ public:
         stream = nullptr;
     }
 
+    std::vector<uint8_t> getInstantMicBuffer(size_t size) {
+        size_t numFrames = size / sizeof(float);
+        std::vector<float> floatBuffer(numFrames);
+        std::vector<uint8_t> byteBuffer(size);
+
+        if (!isRecording) {
+            err = Pa_ReadStream(stream, floatBuffer.data(), numFrames);
+            if (err != paNoError) {
+                std::cerr << "PortAudio read error: " << Pa_GetErrorText(err) << std::endl;
+                byteBuffer.clear();
+                return byteBuffer;
+            }
+            memcpy(byteBuffer.data(), floatBuffer.data(), size);
+        } else {
+            std::cerr << "Stream is recording. First stop record." << std::endl;
+            byteBuffer.clear();
+        }
+
+        return byteBuffer;
+    }
+
 private:
     PaStream* stream;
     PaError err;
