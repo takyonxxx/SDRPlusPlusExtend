@@ -47,13 +47,17 @@ public:
     }
 
     ~HackRFSourceModule() {
-//        stopRecording();
-//        micReader->finish();
         stop(this);
         hackrf_exit();
         sigpath::sourceManager.unregisterSource("HackRF");
 
-//        delete micReader;
+        if(micReader)
+        {
+            stopRecording();
+            micReader->finish();
+            delete micReader;
+        }
+
         delete[] _iqCache[0];
         delete[] _iqCache;
     }
@@ -245,11 +249,10 @@ private:
         if(_this->ptt)
         {
             _this->biasT = true;
-             if (_this->txSendType == 0)
-             {
-                _this->startRecording();
-                // _this->mic_thread = std::thread(generateMicData, std::ref(_this->circular_buffer), _this->sampleRate);
-             }
+//             if (_this->txSendType == 0)
+//             {
+//                _this->startRecording();
+//             }
         }
         else
         {
@@ -289,10 +292,7 @@ private:
         if(_this->ptt)
         {
             hackrf_stop_tx(_this->openDev);
-            _this->stopRecording();
-            // stopMicThread();
-            // if(_this->mic_thread.joinable())
-            //     _this->mic_thread.join();
+//            _this->stopRecording();
         }
         else
             hackrf_stop_rx(_this->openDev);
@@ -492,18 +492,19 @@ private:
         LowPassFilter filter(hackrf_sample_rate, cutoffFreq);
 
         std::vector<uint8_t> mic_buffer;
-        while (mic_buffer.size() < length / 2) {
-            std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
-            circular_buffer.data_available_.wait(lock, [&] {
-                return circular_buffer.buffer_.size() - circular_buffer.tail_ >= 1;
-            });
+        mic_buffer = micReader->getInstantMicBuffer(1024);
+//        while (mic_buffer.size() < length / 2) {
+//            std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
+//            circular_buffer.data_available_.wait(lock, [&] {
+//                return circular_buffer.buffer_.size() - circular_buffer.tail_ >= 1;
+//            });
 
-            size_t remainingSpace = (length / 2) - mic_buffer.size();
-            size_t samplesToCopy = std::min(remainingSpace, circular_buffer.buffer_.size() - circular_buffer.tail_);
-            mic_buffer.insert(mic_buffer.end(), circular_buffer.buffer_.begin() + circular_buffer.tail_,
-                              circular_buffer.buffer_.begin() + circular_buffer.tail_ + samplesToCopy);
-            circular_buffer.tail_ = (circular_buffer.tail_ + samplesToCopy) % circular_buffer.buffer_.size();
-        }
+//            size_t remainingSpace = (length / 2) - mic_buffer.size();
+//            size_t samplesToCopy = std::min(remainingSpace, circular_buffer.buffer_.size() - circular_buffer.tail_);
+//            mic_buffer.insert(mic_buffer.end(), circular_buffer.buffer_.begin() + circular_buffer.tail_,
+//                              circular_buffer.buffer_.begin() + circular_buffer.tail_ + samplesToCopy);
+//            circular_buffer.tail_ = (circular_buffer.tail_ + samplesToCopy) % circular_buffer.buffer_.size();
+//        }
 
         for (uint32_t sampleIndex = 0; sampleIndex < length; sampleIndex += 2) {
             double time = (current_tx_sample + sampleIndex / 2) / hackrf_sample_rate;
