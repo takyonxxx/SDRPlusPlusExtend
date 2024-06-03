@@ -33,28 +33,28 @@
 #endif
 
 namespace core {
-    ConfigManager configManager;
-    ModuleManager moduleManager;
-    ModuleComManager modComManager;
-    CommandArgsParser args;
+ConfigManager configManager;
+ModuleManager moduleManager;
+ModuleComManager modComManager;
+CommandArgsParser args;
 
-    void setInputSampleRate(double samplerate) {
-        // Forward this to the server
-        if (args["server"].b()) { server::setInputSampleRate(samplerate); return; }
-        
-        // Update IQ frontend input samplerate and get effective samplerate
-        sigpath::iqFrontEnd.setSampleRate(samplerate);
-        double effectiveSr  = sigpath::iqFrontEnd.getEffectiveSamplerate();
-        
-        // Reset zoom
-        gui::waterfall.setBandwidth(effectiveSr);
-        gui::waterfall.setViewOffset(0);
-        gui::waterfall.setViewBandwidth(effectiveSr);
-        gui::mainWindow.setViewBandwidthSlider(1.0);
+void setInputSampleRate(double samplerate) {
+    // Forward this to the server
+    if (args["server"].b()) { server::setInputSampleRate(samplerate); return; }
 
-        // Debug logs
-        flog::info("New DSP samplerate: {0} (source samplerate is {1})", effectiveSr, samplerate);
-    }
+    // Update IQ frontend input samplerate and get effective samplerate
+    sigpath::iqFrontEnd.setSampleRate(samplerate);
+    double effectiveSr  = sigpath::iqFrontEnd.getEffectiveSamplerate();
+
+    // Reset zoom
+    gui::waterfall.setBandwidth(effectiveSr);
+    gui::waterfall.setViewOffset(0);
+    gui::waterfall.setViewBandwidth(effectiveSr);
+    gui::mainWindow.setViewBandwidthSlider(1.0);
+
+    // Debug logs
+    flog::info("New DSP samplerate: {0} (source samplerate is {1})", effectiveSr, samplerate);
+}
 };
 
 // main
@@ -69,7 +69,7 @@ int sdrpp_main(int argc, char* argv[]) {
 
     // Define command line options and parse arguments
     core::args.defineAll();
-    if (core::args.parse(argc, argv) < 0) { return -1; } 
+    if (core::args.parse(argc, argv) < 0) { return -1; }
 
     // Show help and exit if requested
     if (core::args["help"].b()) {
@@ -173,10 +173,10 @@ int sdrpp_main(int argc, char* argv[]) {
     defConfig["moduleInstances"]["BladeRF Source"]["enabled"] = true;
     defConfig["moduleInstances"]["File Source"]["module"] = "file_source";
     defConfig["moduleInstances"]["File Source"]["enabled"] = true;
+    defConfig["moduleInstances"]["HackRF Source"]["module"] = "hackrf_source";
+    defConfig["moduleInstances"]["HackRF Source"]["enabled"] = true;
     defConfig["moduleInstances"]["HackRF Sink"]["module"] = "hackrf_sink";
     defConfig["moduleInstances"]["HackRF Sink"]["enabled"] = true;
-    defConfig["moduleInstances"]["HackRF Source"]["module"] = "hackrf_source";
-    defConfig["moduleInstances"]["HackRF Source"]["enabled"] = true;    
     defConfig["moduleInstances"]["Hermes Source"]["module"] = "hermes_source";
     defConfig["moduleInstances"]["Hermes Source"]["enabled"] = true;
     defConfig["moduleInstances"]["LimeSDR Source"]["module"] = "limesdr_source";
@@ -269,7 +269,7 @@ int sdrpp_main(int argc, char* argv[]) {
     core::configManager.enableAutoSave();
     core::configManager.acquire();
 
-    // Android can't load just any .so file. This means we have to hardcode the name of the modules
+// Android can't load just any .so file. This means we have to hardcode the name of the modules
 #ifdef __ANDROID__
     int modCount = 0;
     core::configManager.conf["modules"] = json::array();
@@ -374,7 +374,7 @@ int sdrpp_main(int argc, char* argv[]) {
     // Run render loop (TODO: CHECK RETURN VALUE)
     backend::renderLoop();
 
-    // On android, none of this shutdown should happen due to the way the UI works
+// On android, none of this shutdown should happen due to the way the UI works
 #ifndef __ANDROID__
     // Shut down all modules
     for (auto& [name, mod] : core::moduleManager.modules) {

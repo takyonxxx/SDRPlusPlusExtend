@@ -31,6 +31,8 @@ void ConfigManager::load(json def, bool lock) {
         return;
     }
 
+    flog::info("Config file '{}'", path);
+
     try {
         std::ifstream file(path.c_str());
         file >> conf;

@@ -6,7 +6,7 @@ file(GLOB SRC "src/*.cpp")
 include(${SDRPP_MODULE_CMAKE})
 
 target_sources(hackrf_sink
-  PRIVATE
+    PRIVATE
     src/constants.h
 )
 
@@ -23,10 +23,10 @@ elseif (ANDROID)
         /sdr-kit/${ANDROID_ABI}/include/libhackrf
     )
 
-    target_link_libraries(hackrf_sink PUBLIC
-        /sdr-kit/${ANDROID_ABI}/lib/libusb1.0.so
-        /sdr-kit/${ANDROID_ABI}/lib/libhackrf.so
-    )
+target_link_libraries(hackrf_sink PUBLIC
+    /sdr-kit/${ANDROID_ABI}/lib/libusb1.0.so
+    /sdr-kit/${ANDROID_ABI}/lib/libhackrf.so
+)
 else (MSVC)
     find_package(PkgConfig)
 
@@ -40,13 +40,23 @@ else (MSVC)
     target_link_directories(hackrf_sink PRIVATE ${PORTAUDIO_LIBRARY_DIRS})
     target_link_libraries(hackrf_sink PRIVATE ${PORTAUDIO_LIBRARIES})
 
+    # pkg_check_modules(Gnuradio REQUIRED gnuradio)
+    # target_include_directories(hackrf_sink PRIVATE ${GNURADIO_INCLUDE_DIRS})
+    # target_link_directories(hackrf_sink PRIVATE ${GNURADIO_LIBRARY_DIRS})
+    # target_link_libraries(hackrf_sink PRIVATE ${GNURADIO_LIBRARIES})
+
+    pkg_check_modules(VOLK REQUIRED volk)
+    target_include_directories(hackrf_sink PRIVATE ${VOLK_INCLUDE_DIRS})
+    target_link_directories(hackrf_sink PRIVATE ${VOLK_LIBRARY_DIRS})
+    target_link_libraries(hackrf_sink PRIVATE ${VOLK_LIBRARIES})
+
     find_package(Gnuradio REQUIRED)
     target_include_directories(hackrf_sink PRIVATE ${GNURADIO_INCLUDE_DIRS})
     target_link_libraries(hackrf_sink PRIVATE ${GNURADIO_LIBRARIES})
 
-    find_package(Volk REQUIRED CONFIG)
-    target_include_directories(hackrf_sink PRIVATE ${VOLK_INCLUDE_DIRS})
-    target_link_libraries(hackrf_sink PRIVATE Volk::volk)
+    # find_package(Volk REQUIRED CONFIG)
+    # target_include_directories(hackrf_sink PRIVATE ${VOLK_INCLUDE_DIRS})
+    # target_link_libraries(hackrf_sink PRIVATE Volk::volk)
 
     # Manually set include directories for Homebrew libraries
     set(HOMEBREW_CELLAR_PATH /usr/local/Cellar)
@@ -64,18 +74,18 @@ else (MSVC)
         ${HOMEBREW_CELLAR_PATH}/portaudio/19.7.0/include
     )
 
-    # Link libraries from Homebrew
-    target_link_libraries(hackrf_sink PRIVATE
-        ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-analog.dylib
-        ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-blocks.dylib
-        ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-digital.dylib
-        ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-filter.dylib
-        ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-fft.dylib
-        ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-runtime.dylib
-        ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-audio.dylib
-        ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-soapy.dylib
-        ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-pmt.dylib
-        ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-uhd.dylib
-    )
+# Link libraries from Homebrew
+target_link_libraries(hackrf_sink PRIVATE
+    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-analog.dylib
+    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-blocks.dylib
+    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-digital.dylib
+    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-filter.dylib
+    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-fft.dylib
+    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-runtime.dylib
+    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-audio.dylib
+    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-soapy.dylib
+    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-pmt.dylib
+    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-uhd.dylib
+)
 
 endif ()
