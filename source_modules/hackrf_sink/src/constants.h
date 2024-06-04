@@ -29,6 +29,12 @@
 #include <gui/widgets/stepped_slider.h>
 #include <gui/smgui.h>
 
+#include <gnuradio/top_block.h>
+#include <gnuradio/analog/frequency_modulator_fc.h>
+#include <gnuradio/audio/source.h>
+#include <gnuradio/blocks/multiply_const.h>
+#include <gnuradio/filter/rational_resampler.h>
+#include <gnuradio/soapy/sink.h>
 
 #ifndef __ANDROID__
 #include <libhackrf/hackrf.h>
@@ -55,6 +61,15 @@ SDRPP_MOD_INFO{
     /* Version:         */ 0, 1, 0,
     /* Max instances    */ 1
 };
+
+#define _GHZ(x) ((uint64_t)(x) * 1000000000)
+#define _MHZ(x) ((x) * 1000000)
+#define _KHZ(x) ((x) * 1000)
+#define _HZ(x) ((x) * 1)
+
+#define HACKRF_TX_VGA_MAX_DB        47
+#define HACKRF_AMP_MAX_DB           14
+#define FRAMES_PER_BUFFER            512
 
 ConfigManager config;
 

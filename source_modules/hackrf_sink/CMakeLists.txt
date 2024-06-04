@@ -40,11 +40,6 @@ else (MSVC)
     target_link_directories(hackrf_sink PRIVATE ${PORTAUDIO_LIBRARY_DIRS})
     target_link_libraries(hackrf_sink PRIVATE ${PORTAUDIO_LIBRARIES})
 
-    # pkg_check_modules(Gnuradio REQUIRED gnuradio)
-    # target_include_directories(hackrf_sink PRIVATE ${GNURADIO_INCLUDE_DIRS})
-    # target_link_directories(hackrf_sink PRIVATE ${GNURADIO_LIBRARY_DIRS})
-    # target_link_libraries(hackrf_sink PRIVATE ${GNURADIO_LIBRARIES})
-
     pkg_check_modules(VOLK REQUIRED volk)
     target_include_directories(hackrf_sink PRIVATE ${VOLK_INCLUDE_DIRS})
     target_link_directories(hackrf_sink PRIVATE ${VOLK_LIBRARY_DIRS})
@@ -54,38 +49,41 @@ else (MSVC)
     target_include_directories(hackrf_sink PRIVATE ${GNURADIO_INCLUDE_DIRS})
     target_link_libraries(hackrf_sink PRIVATE ${GNURADIO_LIBRARIES})
 
-    # find_package(Volk REQUIRED CONFIG)
-    # target_include_directories(hackrf_sink PRIVATE ${VOLK_INCLUDE_DIRS})
-    # target_link_libraries(hackrf_sink PRIVATE Volk::volk)
+    if(APPLE)
+        # Check if the CPU architecture is Intel
+        if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "i386")
+            set(HOMEBREW_CELLAR_PATH /usr/local/Cellar)
+        # Check if the CPU architecture is Apple Silicon (ARM)
+        elseif(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "arm64" OR CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "aarch64")
+            set(HOMEBREW_CELLAR_PATH /opt/homebrew/Cellar)
+        else()
+            message(FATAL_ERROR "Unsupported CPU architecture on macOS")
+        endif()
+        target_include_directories(hackrf_sink PRIVATE
+            ${HOMEBREW_CELLAR_PATH}/hackrf/2024.02.1/include
+            ${HOMEBREW_CELLAR_PATH}/spdlog/1.13.0/include
+            ${HOMEBREW_CELLAR_PATH}/fmt/10.2.1_1/include
+            ${HOMEBREW_CELLAR_PATH}/gmp/6.3.0/include
+            ${HOMEBREW_CELLAR_PATH}/volk/3.1.2/include
+            ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/include
+            ${HOMEBREW_CELLAR_PATH}/boost/1.85.0/include
+            ${HOMEBREW_CELLAR_PATH}/soapysdr/0.8.1_1/include
+            ${HOMEBREW_CELLAR_PATH}/fftw/3.3.10_1/include
+            ${HOMEBREW_CELLAR_PATH}/portaudio/19.7.0/include
+        )
 
-    # Manually set include directories for Homebrew libraries
-    set(HOMEBREW_CELLAR_PATH /usr/local/Cellar)
-
-    target_include_directories(hackrf_sink PRIVATE
-        ${HOMEBREW_CELLAR_PATH}/hackrf/2024.02.1/include
-        ${HOMEBREW_CELLAR_PATH}/spdlog/1.13.0/include
-        ${HOMEBREW_CELLAR_PATH}/fmt/10.2.1_1/include
-        ${HOMEBREW_CELLAR_PATH}/gmp/6.3.0/include
-        ${HOMEBREW_CELLAR_PATH}/volk/3.1.2/include
-        ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/include
-        ${HOMEBREW_CELLAR_PATH}/boost/1.85.0/include
-        ${HOMEBREW_CELLAR_PATH}/soapysdr/0.8.1_1/include
-        ${HOMEBREW_CELLAR_PATH}/fftw/3.3.10_1/include
-        ${HOMEBREW_CELLAR_PATH}/portaudio/19.7.0/include
-    )
-
-# Link libraries from Homebrew
-target_link_libraries(hackrf_sink PRIVATE
-    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-analog.dylib
-    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-blocks.dylib
-    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-digital.dylib
-    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-filter.dylib
-    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-fft.dylib
-    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-runtime.dylib
-    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-audio.dylib
-    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-soapy.dylib
-    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-pmt.dylib
-    ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-uhd.dylib
-)
-
+        # Link libraries from Homebrew
+        target_link_libraries(hackrf_sink PRIVATE
+            ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-analog.dylib
+            ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-blocks.dylib
+            ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-digital.dylib
+            ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-filter.dylib
+            ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-fft.dylib
+            ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-runtime.dylib
+            ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-audio.dylib
+            ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-soapy.dylib
+            ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-pmt.dylib
+            ${HOMEBREW_CELLAR_PATH}/gnuradio/3.10.9.2_4/lib/libgnuradio-uhd.dylib
+        )
+    endif ()
 endif ()

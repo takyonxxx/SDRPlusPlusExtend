@@ -6,8 +6,7 @@ public:
     HackRFSinkModule(std::string name):
         name(name)
     {
-        this->name = name;
-        hackrf_init();
+        this->name = name;        
 
         handler.ctx = this;
         handler.selectHandler = menuSelected;
@@ -51,19 +50,45 @@ public:
         devList.clear();
         devListTxt = "";
 
-        uint64_t serials[256];
-        hackrf_device_list_t* _devList = hackrf_device_list();
+        try {
+            // Initialize the HackRF library
+            int result = hackrf_init();
+            if (result != HACKRF_SUCCESS) {
+                flog::error("Failed to initialize HackRF: {}", hackrf_error_name(static_cast<hackrf_error>(result)));
+                return;
+            }
 
-        for (int i = 0; i < _devList->devicecount; i++) {
-            // Skip devices that are in use
-            if (_devList->serial_numbers[i] == NULL) { continue; }
+            // Get the list of HackRF devices
+            hackrf_device_list_t* devices = hackrf_device_list();
+            if (devices->devicecount < 1) {
+                flog::error("No HackRF devices found");
+                hackrf_device_list_free(devices);
+                hackrf_exit();
+                devList.push_back("No HackRF devices found");
+                devListTxt += (char*)("No HackRF devices found");
+                devListTxt += '\0';
+                return;
+            }
 
-            // Save the device serial number
-            devList.push_back(_devList->serial_numbers[i]);
-            devListTxt += (char*)(_devList->serial_numbers[i] + 16);
-            devListTxt += '\0';
+            devList.clear();
+            devListTxt = "";
+
+            // Iterate through the list of devices and retrieve their serial numbers
+            for (int i = 0; i < devices->devicecount; ++i) {
+                if (devices->serial_numbers[i] != nullptr) {
+                    std::string serial_number(devices->serial_numbers[i]);
+                    devList.push_back(serial_number);
+                    devListTxt += serial_number;
+                    devListTxt += '\0';
+                }
+            }
+
+            // Free the device list and deinitialize the library
+            hackrf_device_list_free(devices);
+            hackrf_exit();
+        } catch (const std::exception& e) {
+            flog::error("Exception caught in refresh: {}", e.what());
         }
-        hackrf_device_list_free(_devList);
     }
 
     void selectFirst() {
@@ -85,22 +110,22 @@ public:
         config.acquire();
         if (!config.conf["devices"].contains(serial)) {
             config.conf["devices"][serial]["sampleRate"] = 2000000;
-            config.conf["devices"][serial]["biasT"] = false;
-            config.conf["devices"][serial]["amp"] = false;
+            config.conf["devices"][serial]["amp"] = true;
             config.conf["devices"][serial]["txVgaGain"] = 47;
-            config.conf["devices"][serial]["bandwidth"] = 16;
+            config.conf["devices"][serial]["bandwidth"] = 0;
 
         }
         config.release(created);
 
-        // Set default values
+        // Set default values       
+        freq = 100e06;
+        interpolation = 48 * (sampleRate / _MHZ(2));
         srId = 7;
         sampleRate = 2000000;
-        biasT = false;
-        amp = false;
-        ptt = false;
+        audioSampleRate = 44100;
+        amp = true;
         tx_vga = 0;
-        bwId = 1;
+        bwId = 0;
 
         // Load from config if available and validate
         if (config.conf["devices"][serial].contains("sampleRate")) {
@@ -111,10 +136,7 @@ public:
                     srId = i;
                 }
             }
-        }
-        if (config.conf["devices"][serial].contains("biasT")) {
-            biasT = config.conf["devices"][serial]["biasT"];
-        }
+        }       
         if (config.conf["devices"][serial].contains("amp")) {
             amp = config.conf["devices"][serial]["amp"];
         }
@@ -142,6 +164,11 @@ private:
         flog::info("HackRFSinkModule '{0}': Menu Deselect!", _this->name);
     }
 
+    int bandwidthIdToBw(int id) {
+        if (id == 16) { return hackrf_compute_baseband_filter_bw(sampleRate); }
+        return bandwidths[id];
+    }
+
     static void menuHandler(void* ctx) {
         HackRFSinkModule* _this = (HackRFSinkModule*)ctx;
         if (_this->running) { SmGui::BeginDisabled(); }
@@ -157,6 +184,10 @@ private:
 
         if (SmGui::Combo(CONCAT("##_hackrf_sr_sel_", _this->name), &_this->srId, sampleRatesTxt)) {
             _this->sampleRate = sampleRates[_this->srId];
+            if(_this->running)
+            {
+                _this->soapy_hackrf_sink_0->set_sample_rate(0, _this->sampleRate);
+            }
             core::setInputSampleRate(_this->sampleRate);
             config.acquire();
             config.conf["devices"][_this->selectedSerial]["sampleRate"] = _this->sampleRate;
@@ -178,7 +209,7 @@ private:
         SmGui::FillWidth();
         if (SmGui::Combo(CONCAT("##_hackrf_bw_sel_", _this->name), &_this->bwId, bandwidthsTxt)) {
             if (_this->running) {
-
+                _this->soapy_hackrf_sink_0->set_bandwidth(0, _this->bandwidthIdToBw(_this->bwId));
             }
             config.acquire();
             config.conf["devices"][_this->selectedSerial]["bandwidth"] = _this->bwId;
@@ -187,27 +218,18 @@ private:
 
         SmGui::LeftLabel("Tx VGA Gain");
         SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_vga_", _this->name), &_this->tx_vga, 0, 47, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
+        if (SmGui::SliderInt(CONCAT("##_hackrf_tx_vga_", _this->name), &_this->tx_vga, 0, 47, SmGui::FMT_STR_INT_DB)) {
             if (_this->running) {
-
+                _this->soapy_hackrf_sink_0->set_gain(0, "VGA", std::min(std::max(HACKRF_TX_VGA_MAX_DB, 0), _this->tx_vga));
             }
             config.acquire();
             config.conf["devices"][_this->selectedSerial]["txVgaGain"] = (int)_this->tx_vga;
             config.release(true);
-        }
-
-        if (SmGui::Checkbox(CONCAT("Bias-T##_hackrf_bt_", _this->name), &_this->biasT)) {
-            if (_this->running) {
-
-            }
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["biasT"] = _this->biasT;
-            config.release(true);
-        }
+        }       
 
         if (SmGui::Checkbox(CONCAT("Amp Enabled##_hackrf_amp_", _this->name), &_this->amp)) {
             if (_this->running) {
-
+                _this->soapy_hackrf_sink_0->set_gain(0, "AMP", _this->amp);
             }
             config.acquire();
             config.conf["devices"][_this->selectedSerial]["amp"] = _this->amp;
@@ -223,6 +245,52 @@ private:
             return;
         }
 
+        std::string dev = "hackrf=0";
+        std::string stream_args = "";
+        std::vector<std::string> tune_args = {""};
+        std::vector<std::string> settings = {""};
+
+        flog::info("{} Sample rate: {} Hz, Frequency: {} Hz BandWidth: {} Hz", _this->name, _this->sampleRate, _this->freq, _this->bandwidthIdToBw(_this->bwId));
+
+        try {
+            _this->soapy_hackrf_sink_0 = gr::soapy::sink::make(
+                "hackrf",
+                "fc32",
+                1,
+                dev,
+                stream_args,
+                tune_args,
+                settings
+                );
+
+            if (!_this->soapy_hackrf_sink_0) {
+                flog::error("Failed to create HackRf sink.");
+                return;
+            }
+        } catch (const std::exception& e) {
+            flog::error("Exception caught while creating HackRf sink: {}", e.what());
+            return;
+        }
+
+        _this->tb = gr::make_top_block("HackRfSinkTopBlock");
+
+        _this->soapy_hackrf_sink_0->set_sample_rate(0, _this->sampleRate);
+        _this->soapy_hackrf_sink_0->set_frequency(0, _this->freq);
+        _this->soapy_hackrf_sink_0->set_bandwidth(0, _this->bandwidthIdToBw(_this->bwId));
+        _this->soapy_hackrf_sink_0->set_gain(0, "AMP", true);
+        _this->soapy_hackrf_sink_0->set_gain(0, "VGA", std::min(std::max(HACKRF_TX_VGA_MAX_DB, 0), _this->tx_vga));
+
+        _this->rational_resampler_xxx_0 = gr::filter::rational_resampler_ccf::make(_this->interpolation, 1);
+        _this->blocks_multiply_const_vxx_0 = gr::blocks::multiply_const_ff::make(4);
+        _this->audio_source_0 = gr::audio::source::make(_this->audioSampleRate, "", true);
+        _this->analog_frequency_modulator_fc_0 = gr::analog::frequency_modulator_fc::make(1.5);
+
+        // Connections
+        _this->tb->connect((const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0, (const gr::block_sptr&)_this->rational_resampler_xxx_0, 0);
+        _this->tb->connect((const gr::block_sptr&)_this->audio_source_0, 0, (const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0);
+        _this->tb->connect((const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0, (const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0);
+        _this->tb->connect((const gr::block_sptr&)_this->rational_resampler_xxx_0, 0, (const gr::block_sptr&)_this->soapy_hackrf_sink_0, 0);
+
         _this->running = true;
         flog::info("HackRFSinkModule '{0}': Start!", _this->name);
     }
@@ -232,6 +300,14 @@ private:
 
         if (!_this->running) { return; }
 
+        try {
+            _this->tb->stop();
+        } catch (const std::exception& e) {
+            flog::error("Exception caught while stopping hackrf sink top block: {}", e.what());
+        }
+
+        _this->tb.reset();
+
         _this->running = false;
         _this->stream.stopWriter();
         _this->stream.clearWriteStop();
@@ -239,13 +315,45 @@ private:
     }
 
     static void tune(double freq, void* ctx) {
-        HackRFSinkModule* _this = (HackRFSinkModule*)ctx;
+        HackRFSinkModule* _this = (HackRFSinkModule*)ctx;       
+        if (_this->running) {
+            _this->soapy_hackrf_sink_0->set_frequency(0, freq);
+        }
+        _this->freq = freq;
+
+        double display_freq; // Change to double for decimal precision
+        std::string unit;
+
+        if (freq < 1e3) {
+            display_freq = freq;
+            unit = "Hz";
+        } else if (freq < 1e6) {
+            display_freq = freq / 1e3;
+            unit = "kHz";
+        } else if (freq < 1e9) {
+            display_freq = freq / 1e6;
+            unit = "MHz";
+        } else {
+            display_freq = freq / 1e9;
+            unit = "GHz";
+        }
+
+        std::stringstream stream;
+        stream << std::fixed << std::setprecision(1) << display_freq; // Set precision for one decimal place
+        std::string display_freq_str = stream.str();
+
+        // Append unit
+        display_freq_str += " " + unit;
+
+        flog::info("HackRFSourceModule '{0}': Tune: {1}!", _this->name, display_freq_str);
     }
 
     std::string name;
     bool enabled = true;
     dsp::stream<dsp::complex_t> stream;
     int sampleRate;
+    int audioSampleRate;
+    double interpolation;
     SourceManager::SourceHandler handler;
     bool running = false;
     double freq;
@@ -253,10 +361,15 @@ private:
     int devId = 0;
     int srId = 0;
     int bwId = 16;
-    bool biasT = false;
     bool amp = false;
-    bool ptt = false;
-    float tx_vga = 0;
+    int tx_vga = 0;
+
+    gr::top_block_sptr tb;
+    gr::soapy::sink::sptr soapy_hackrf_sink_0;
+    gr::filter::rational_resampler_ccf::sptr rational_resampler_xxx_0;
+    gr::blocks::multiply_const_ff::sptr blocks_multiply_const_vxx_0;
+    gr::audio::source::sptr audio_source_0;
+    gr::analog::frequency_modulator_fc::sptr analog_frequency_modulator_fc_0;
 
 #ifdef __ANDROID__
     int devFd = -1;
