@@ -16,6 +16,8 @@ public:
         tx_vga(0),
         running(false)
     {
+        hackrf_exit();
+
         handler.ctx = this;
         handler.selectHandler = menuSelected;
         handler.deselectHandler = menuDeselected;
@@ -31,7 +33,8 @@ public:
         std::string confSerial = config.conf["device"];
         config.release();
         selectBySerial(confSerial);
-        sigpath::sourceManager.registerSource("HackRFSink", &handler);
+
+        this->tb = gr::make_top_block("HackRfSinkTopBlock");
 
         std::string dev = "hackrf=0";
         std::string stream_args = "";
@@ -39,7 +42,7 @@ public:
         std::vector<std::string> settings = {""};
 
         try {
-            soapy_hackrf_sink_0 = gr::soapy::sink::make(
+            this->soapy_hackrf_sink_0 = gr::soapy::sink::make(
                 "hackrf",
                 "fc32",
                 1,
@@ -49,7 +52,7 @@ public:
                 settings
                 );
 
-            if (!soapy_hackrf_sink_0) {
+            if (!this->soapy_hackrf_sink_0) {
                 flog::error("Failed to create HackRf sink.");
                 return;
             }
@@ -58,10 +61,7 @@ public:
             return;
         }
 
-        this->tb = gr::make_top_block("HackRfSinkTopBlock");
-
         this->interpolation = 48 * (this->sampleRate / _MHZ(2));
-
         this->soapy_hackrf_sink_0->set_sample_rate(0, this->sampleRate);
         this->soapy_hackrf_sink_0->set_frequency(0, this->freq);
         this->soapy_hackrf_sink_0->set_bandwidth(0, this->bandwidthIdToBw(this->bwId));
@@ -73,6 +73,8 @@ public:
         this->audio_source_0 = gr::audio::source::make(this->audioSampleRate, "", true);
         this->analog_frequency_modulator_fc_0 = gr::analog::frequency_modulator_fc::make(1.5);
 
+
+        sigpath::sourceManager.registerSource("HackRFSink", &handler);
         flog::info("{} Sample rate: {} Hz, Frequency: {} Hz BandWidth: {} Hz", this->name, this->sampleRate, this->freq, this->bandwidthIdToBw(this->bwId));
     }
 
@@ -279,26 +281,19 @@ private:
 
     static void start(void* ctx) {
         HackRFSinkModule* _this = (HackRFSinkModule*)ctx;
-        if (_this->running) { return; }
-
-        if (!_this->soapy_hackrf_sink_0){
-            flog::error("HackRF sink not found.");
-            return;
-        }
+        if (_this->running) { return; }        
 
         if (_this->selectedSerial == "") {
             flog::error("Tried to start HackRF sink with empty serial");
             return;
         }
+        _this->tb->lock();
+        _this->tb->connect((const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0, (const gr::block_sptr&)_this->rational_resampler_xxx_0, 0);
+        _this->tb->connect((const gr::block_sptr&)_this->audio_source_0, 0, (const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0);
+        _this->tb->connect((const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0, (const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0);
+        _this->tb->connect((const gr::block_sptr&)_this->rational_resampler_xxx_0, 0, (const gr::block_sptr&)_this->soapy_hackrf_sink_0, 0);
+        _this->tb->unlock();
 
-        if (!_this->selectedSerial.empty()) {
-            _this->tb->lock();
-            _this->tb->connect((const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0, (const gr::block_sptr&)_this->rational_resampler_xxx_0, 0);
-            _this->tb->connect((const gr::block_sptr&)_this->audio_source_0, 0, (const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0);
-            _this->tb->connect((const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0, (const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0);
-            _this->tb->connect((const gr::block_sptr&)_this->rational_resampler_xxx_0, 0, (const gr::block_sptr&)_this->soapy_hackrf_sink_0, 0);
-            _this->tb->unlock();
-        }
         try {
             _this->tb->start();
             core::setInputSampleRate(_this->sampleRate);
@@ -318,7 +313,11 @@ private:
 
         try {
             _this->tb->stop();
+            _this->tb->wait();
+            // Disconnect all blocks
+            _this->tb->lock();
             _this->tb->disconnect_all();
+            _this->tb->unlock();
         } catch (const std::exception& e) {
             flog::error("Exception caught while stopping hackrf sink top block: {}", e.what());
         }

@@ -28,7 +28,7 @@ public:
         std::string confSerial = config.conf["device"];
         config.release();
         selectBySerial(confSerial);
-        sigpath::sourceManager.registerSource("HackRF", &handler);
+        sigpath::sourceManager.registerSource("HackRFSource", &handler);
 
         std::string marker = "CMakeLists.txt";
         std::string projectFolder = findProjectFolder(marker);
@@ -97,7 +97,7 @@ public:
 
     void refresh() {
         devList.clear();
-        devListTxt = "";
+        devListTxt = "";        
 
 #ifndef __ANDROID__
         uint64_t serials[256];
@@ -110,6 +110,13 @@ public:
             // Save the device serial number
             devList.push_back(_devList->serial_numbers[i]);
             devListTxt += (char*)(_devList->serial_numbers[i] + 16);
+            devListTxt += '\0';
+        }
+
+        if(devListTxt.empty())
+        {
+            devList.push_back("No HackRF devices found");
+            devListTxt += (char*)("No HackRF devices found");
             devListTxt += '\0';
         }
 
