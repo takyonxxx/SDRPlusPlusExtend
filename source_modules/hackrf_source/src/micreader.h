@@ -31,13 +31,12 @@ public:
             return false;
         }
         inputParameters.channelCount = 1; // Mono input
-        inputParameters.sampleFormat = paFloat32;
+        inputParameters.sampleFormat = paInt8;
         inputParameters.suggestedLatency = Pa_GetDeviceInfo(inputParameters.device)->defaultHighInputLatency;
         inputParameters.hostApiSpecificStreamInfo = nullptr;
 
-        err = Pa_OpenDefaultStream(&stream, 1, 0, paFloat32, SAMPLE_RATE, FRAMES_PER_BUFFER, &MicReader::paCallback, this);
-        if (err != paNoError) {
-            std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
+        if (Pa_OpenStream(&stream, &inputParameters, nullptr, SAMPLE_RATE, paFramesPerBufferUnspecified, paClipOff, &MicReader::paCallback, this) != paNoError) {
+            std::cerr << "Failed to open audio stream" << std::endl;
             Pa_Terminate();
             return false;
         }
@@ -98,19 +97,23 @@ private:
     CircularBuffer& circular_buffer_;
 
     static const int SAMPLE_RATE = 44100;
-    static const int FRAMES_PER_BUFFER = 512;
+    static const int FRAMES_PER_BUFFER = 256;
 
     static int paCallback(const void* inputBuffer, void* outputBuffer,
                           unsigned long framesPerBuffer,
                           const PaStreamCallbackTimeInfo* timeInfo,
                           PaStreamCallbackFlags statusFlags,
                           void* userData) {
-        MicReader* micReader = static_cast<MicReader*>(userData);
-        const float* micBuffer = static_cast<const float*>(inputBuffer);
-        size_t bufferSize = framesPerBuffer * sizeof(float);
-        std::vector<uint8_t> micData(bufferSize);
-        memcpy(micData.data(), micBuffer, bufferSize);
-        micReader->circular_buffer_.write(micData);
+        MicReader* micReader = static_cast<MicReader*>(userData);        
+        const int8_t* in = static_cast<const int8_t*>(inputBuffer);
+        for (unsigned long i = 0; i < framesPerBuffer; ++i) {
+            {
+                std::lock_guard<std::mutex> lock(micReader->circular_buffer_.mutex_);
+                micReader->circular_buffer_.buffer_[micReader->circular_buffer_.head_] = in[i];
+                micReader->circular_buffer_.head_ = (micReader->circular_buffer_.head_ + 1) % micReader->circular_buffer_.buffer_.size();
+            }
+            micReader->circular_buffer_.data_available_.notify_one();
+        }
         return paContinue;
     }
 };

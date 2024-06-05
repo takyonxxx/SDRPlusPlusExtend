@@ -445,14 +445,14 @@ private:
 
         double modulationIndex = 5.0;
         double amplitudeScalingFactor = 1.5;
-        double cutoffFreq = 150.0;
+        double cutoffFreq = 300.0;
         double hackrf_sample_rate = sampleRate;
         double newSampleRate = sampleRate / 50.0;
         double resampleRatio = sampleRate / newSampleRate;
 
         LowPassFilter filter(hackrf_sample_rate, cutoffFreq);
 
-        std::vector<uint8_t> mic_buffer;       
+        std::vector<uint8_t> mic_buffer;
         while (mic_buffer.size() < length / 2) {
             std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
             circular_buffer.data_available_.wait(lock, [&] {
@@ -469,8 +469,8 @@ private:
         for (uint32_t sampleIndex = 0; sampleIndex < length; sampleIndex += 2) {
             double time = (current_tx_sample + sampleIndex / 2) / hackrf_sample_rate;
             double audioSignal = sin(2 * M_PI * 440 * time);
-            //auto sample = mic_buffer[sampleIndex / 2];
-            //double audioSignal = (static_cast<double>(sample * 2.5) / 127.0) - 1.0;
+            // int8_t sample = mic_buffer[sampleIndex / 2];
+            // double audioSignal = (static_cast<double>(sample * 1.5) / 127.0) - 1.0;
             double filteredAudioSignal = filter.filter(audioSignal);
             double modulatedPhase = 2 * M_PI * time + modulationIndex * filteredAudioSignal;
             double inPhaseComponent = cos(modulatedPhase) * amplitudeScalingFactor;
@@ -478,7 +478,6 @@ private:
             buffer[sampleIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
             buffer[sampleIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
         }
-        std::cout << mic_buffer.size() << " "<< length << std::endl;
         current_tx_sample += length / 2;
     }
 
