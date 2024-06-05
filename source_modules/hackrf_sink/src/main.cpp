@@ -16,8 +16,6 @@ public:
         tx_vga(0),
         running(false)
     {
-        hackrf_exit();
-
         handler.ctx = this;
         handler.selectHandler = menuSelected;
         handler.deselectHandler = menuDeselected;
@@ -61,18 +59,10 @@ public:
             return;
         }
 
-        this->interpolation = 48 * (this->sampleRate / _MHZ(2));
-        this->soapy_hackrf_sink_0->set_sample_rate(0, this->sampleRate);
-        this->soapy_hackrf_sink_0->set_frequency(0, this->freq);
-        this->soapy_hackrf_sink_0->set_bandwidth(0, this->bandwidthIdToBw(this->bwId));
-        this->soapy_hackrf_sink_0->set_gain(0, "AMP", true);
-        this->soapy_hackrf_sink_0->set_gain(0, "VGA", std::min(std::max(HACKRF_TX_VGA_MAX_DB, 0), this->tx_vga));
-
         this->rational_resampler_xxx_0 = gr::filter::rational_resampler_ccf::make(this->interpolation, 1);
         this->blocks_multiply_const_vxx_0 = gr::blocks::multiply_const_ff::make(4);
         this->audio_source_0 = gr::audio::source::make(this->audioSampleRate, "", true);
         this->analog_frequency_modulator_fc_0 = gr::analog::frequency_modulator_fc::make(1.5);
-
 
         sigpath::sourceManager.registerSource("HackRFSink", &handler);
         flog::info("{} Sample rate: {} Hz, Frequency: {} Hz BandWidth: {} Hz", this->name, this->sampleRate, this->freq, this->bandwidthIdToBw(this->bwId));
@@ -80,7 +70,13 @@ public:
 
      ~HackRFSinkModule() {        
         this->tb->stop();
+        this->tb->wait();
         this->tb.reset();
+        this->rational_resampler_xxx_0.reset();
+        this->blocks_multiply_const_vxx_0.reset();
+        this->audio_source_0.reset();
+        this->analog_frequency_modulator_fc_0.reset();
+        this->soapy_hackrf_sink_0.reset();
          stop(this);
          sigpath::sourceManager.unregisterSource("HackRFSink");
      }
@@ -287,6 +283,14 @@ private:
             flog::error("Tried to start HackRF sink with empty serial");
             return;
         }
+
+        _this->interpolation = 48 * (_this->sampleRate / _MHZ(2));
+        _this->soapy_hackrf_sink_0->set_sample_rate(0, _this->sampleRate);
+        _this->soapy_hackrf_sink_0->set_frequency(0, _this->freq);
+        _this->soapy_hackrf_sink_0->set_bandwidth(0, _this->bandwidthIdToBw(_this->bwId));
+        _this->soapy_hackrf_sink_0->set_gain(0, "AMP", _this->amp);
+        _this->soapy_hackrf_sink_0->set_gain(0, "VGA", std::min(std::max(HACKRF_TX_VGA_MAX_DB, 0), _this->tx_vga));
+
         _this->tb->lock();
         _this->tb->connect((const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0, (const gr::block_sptr&)_this->rational_resampler_xxx_0, 0);
         _this->tb->connect((const gr::block_sptr&)_this->audio_source_0, 0, (const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0);
@@ -314,7 +318,6 @@ private:
         try {
             _this->tb->stop();
             _this->tb->wait();
-            // Disconnect all blocks
             _this->tb->lock();
             _this->tb->disconnect_all();
             _this->tb->unlock();
