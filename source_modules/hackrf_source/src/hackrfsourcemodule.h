@@ -26,6 +26,8 @@
 #include <gui/widgets/stepped_slider.h>
 #include <gui/smgui.h>
 #include "circular_buffer.h"
+#include "constants.h"
+#include "micreader.h"
 
 #ifndef __ANDROID__
 #include <libhackrf/hackrf.h>
@@ -99,15 +101,6 @@ const char* bandwidthsTxt = "1.75MHz\0"
                             "24MHz\0"
                             "28MHz\0"
                             "Auto\0";
-
-const int txModes[] = {
-    0,
-    1,
-};
-
-const char* txModesTxt = "Microphone\0"
-                         "Wave File\0";
-
 
 class LowPassFilter {
 private:

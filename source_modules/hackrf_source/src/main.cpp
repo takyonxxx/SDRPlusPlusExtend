@@ -1,7 +1,4 @@
 #include "hackrfsourcemodule.h"
-#include "constants.h"
-#include "wavreader.h"
-#include "micreader.h"
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:
@@ -30,12 +27,6 @@ public:
         selectBySerial(confSerial);
         sigpath::sourceManager.registerSource("HackRFSource", &handler);
 
-        std::string marker = "CMakeLists.txt";
-        std::string projectFolder = findProjectFolder(marker);
-        std::string filePath = projectFolder + "/source_modules/hackrf_source/src/input.wav";
-        const char* path = filePath.c_str();
-        prepareWaveData(path);
-
         micReader = new MicReader(circular_buffer);
         if (!micReader->init()) {
             std::cerr << "Error initializing MicReader!" << std::endl;
@@ -53,9 +44,6 @@ public:
             micReader->finish();
             delete micReader;
         }
-
-        delete[] _iqCache[0];
-        delete[] _iqCache;
     }
 
     void startRecording() {
@@ -96,6 +84,7 @@ public:
     }
 
     void refresh() {
+
         devList.clear();
         devListTxt = "";        
 
@@ -130,6 +119,7 @@ public:
         devListTxt += fakeName;
         devListTxt += '\0';
 #endif
+
     }
 
     void selectFirst() {
@@ -157,8 +147,6 @@ public:
             config.conf["devices"][serial]["vgaGain"] = 40;
             config.conf["devices"][serial]["txVgaGain"] = 47;
             config.conf["devices"][serial]["bandwidth"] = 16;
-            config.conf["devices"][serial]["txSendType"] = 2;
-
         }
         config.release(created);
 
@@ -204,10 +192,7 @@ public:
         if (config.conf["devices"][serial].contains("bandwidth")) {
             bwId = config.conf["devices"][serial]["bandwidth"];
             bwId = std::clamp<int>(bwId, 0, 16);
-        }
-        if (config.conf["devices"][serial].contains("txSendType")) {
-            txSendType = config.conf["devices"][serial]["txSendType"];
-        }
+        }        
 
         selectedSerial = serial;
     }
@@ -252,11 +237,8 @@ private:
         _this->current_tx_sample = 0;
         if(_this->ptt)
         {
-            _this->biasT = true;
-            if (_this->txSendType == 0)
-            {
-                _this->startRecording();
-            }
+            _this->biasT = true;           
+            _this->startRecording();
         }
         else
         {
@@ -288,18 +270,13 @@ private:
     static void stop(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
 
-        if (!_this->running) { return; }
-
-        _this->running = false;
+        if (!_this->running) { return; }        
         _this->stream.stopWriter();
 
         if(_this->ptt)
         {
-            hackrf_stop_tx(_this->openDev);
-            if (_this->txSendType == 0)
-            {
-                _this->stopRecording();
-            }
+            hackrf_stop_tx(_this->openDev);           
+            _this->stopRecording();
         }
         else
             hackrf_stop_rx(_this->openDev);
@@ -308,7 +285,10 @@ private:
         if (err != HACKRF_SUCCESS) {
             flog::error("Could not close HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
         }
+
         _this->stream.clearWriteStop();
+        _this->running = false;
+
         flog::info("HackRFSourceModule '{0}': Stop!", _this->name);
     }
 
@@ -388,13 +368,6 @@ private:
             config.conf["devices"][_this->selectedSerial]["bandwidth"] = _this->bwId;
             config.release(true);
         }
-        SmGui::LeftLabel("Tx Mode");
-        SmGui::FillWidth();
-        if (SmGui::Combo(CONCAT("##_hackrf_tx_mod_", _this->name), &_this->txSendType, txModesTxt)) {
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["txSendType"] = _this->txSendType;
-            config.release(true);
-        }
 
         SmGui::LeftLabel("LNA Gain");
         SmGui::FillWidth();
@@ -468,25 +441,6 @@ private:
         return 0;
     }
 
-    int send_wav_tx(int8_t *buffer, uint32_t length) {
-        if(_iqCache)
-        {
-            int _nsample = (float)_audioSampleRate * (float)BUF_LEN / (float)sampleRate / 2.0;
-            int totalSampleCount = _numSampleCount / _nsample;
-
-            if (_buffCount >= totalSampleCount) {
-                _buffCount = 0;
-            }
-
-            if (_buffCount < totalSampleCount) {
-                uint32_t copyLength = std::min(length, static_cast<uint32_t>(BUF_LEN));
-                std::copy_n(_iqCache[_buffCount], copyLength, buffer);
-                _buffCount++;
-            }
-        }
-        return 0;
-    }
-
     void apply_modulation_resapmler(int8_t* buffer, uint32_t length) {
 
         double modulationIndex = 5.0;
@@ -514,9 +468,9 @@ private:
 
         for (uint32_t sampleIndex = 0; sampleIndex < length; sampleIndex += 2) {
             double time = (current_tx_sample + sampleIndex / 2) / hackrf_sample_rate;
-            // double audioSignal = sin(2 * M_PI * 440 * time);
-            auto sample = mic_buffer[sampleIndex / 2];
-            double audioSignal = (static_cast<double>(sample * 2.5) / 127.0) - 1.0;
+            double audioSignal = sin(2 * M_PI * 440 * time);
+            //auto sample = mic_buffer[sampleIndex / 2];
+            //double audioSignal = (static_cast<double>(sample * 2.5) / 127.0) - 1.0;
             double filteredAudioSignal = filter.filter(audioSignal);
             double modulatedPhase = 2 * M_PI * time + modulationIndex * filteredAudioSignal;
             double inPhaseComponent = cos(modulatedPhase) * amplitudeScalingFactor;
@@ -535,79 +489,8 @@ private:
 
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-
-        if (_this->txSendType == 0)
-        {
-            return _this->send_mic_tx((int8_t *)transfer->buffer, transfer->valid_length);
-        }
-        else if (_this->txSendType == 1)
-        {
-            if(_this->_iqCache)
-            {
-                return _this->send_wav_tx((int8_t *)transfer->buffer, transfer->valid_length);
-            }
-        }
-        return 0;
+        return _this->send_mic_tx((int8_t *)transfer->buffer, transfer->valid_length);
     }
-
-    void prepareWaveData(const char *path){
-
-        WaveData *wave = wavRead(path, strlen(path));
-        int nch = wave->header.numChannels;
-        _audioSampleRate = wave->sampleRate;
-        _numSampleCount = wave->size / wave->header.blockAlign;
-
-        std::cout<< _numSampleCount << std::endl;
-
-        _audioSampleBuf=new float[_numSampleCount]();
-        _new_audio_buf = new float[BUF_LEN/2]();
-        _new_audio_buf1 = new float[BUF_LEN/2]();
-        _new_audio_buf2 = new float[BUF_LEN/2]();
-        _new_audio_buf3 = new float[BUF_LEN/2]();
-
-        if(nch==1){
-
-            for(int i=0;i<_numSampleCount;i++){
-
-                _audioSampleBuf[i] = wave->samples[i];
-            }
-
-        }else if(nch==2){
-
-            for(int i=0;i<_numSampleCount;i++){
-
-                _audioSampleBuf[i] = (wave->samples[i * 2] + wave->samples[i * 2 + 1]) / (float)2.0;
-            }
-        }
-
-        int _nsample = (float) _audioSampleRate * (float) BUF_LEN / (float) sampleRate / 2.0;
-
-        _iqCache = new int8_t *[_numSampleCount / _nsample]();
-        for (int i = 0; i < _numSampleCount / _nsample; i++) {
-            _iqCache[i] = new int8_t[BUF_LEN]();
-        }
-
-#pragma omp parallel for
-        for (int i = 0; i < _numSampleCount / _nsample; i++) {
-            if (i < _numSampleCount / _nsample / 4) {
-                interpolation(_audioSampleBuf + (_nsample * i), _nsample, _new_audio_buf, BUF_LEN / 2);
-                modulation(_new_audio_buf, _iqCache[i], 0, sampleRate);
-            }
-            else if (i < _numSampleCount / _nsample / 4 * 2) {
-                interpolation(_audioSampleBuf + (_nsample * i), _nsample, _new_audio_buf1, BUF_LEN / 2);
-                modulation(_new_audio_buf1, _iqCache[i], 0, sampleRate);
-            }
-            else if (i < _numSampleCount / _nsample / 4 * 3) {
-                interpolation(_audioSampleBuf + (_nsample * i), _nsample, _new_audio_buf2, BUF_LEN / 2);
-                modulation(_new_audio_buf2, _iqCache[i], 0, sampleRate);
-            }
-            else if (i < _numSampleCount / _nsample) {
-                interpolation(_audioSampleBuf + (_nsample * i), _nsample, _new_audio_buf3, BUF_LEN / 2);
-                modulation(_new_audio_buf3, _iqCache[i], 0, sampleRate);
-            }
-        }
-    }
-
 
     std::string name;
     hackrf_device* openDev;
@@ -628,19 +511,6 @@ private:
     float vga = 0;
     float tx_vga = 0;
     int current_tx_sample = 0;
-    int txSendType = 0;
-
-    // for wav file
-    int _audioSampleRate=0;
-    float * _audioSampleBuf=NULL;
-    float * _new_audio_buf=NULL;
-    float * _new_audio_buf1=NULL;
-    float * _new_audio_buf2=NULL;
-    float * _new_audio_buf3=NULL;
-    unsigned int offset=0;
-    int32_t  _numSampleCount;
-    int8_t** _iqCache = nullptr;
-    int _buffCount = 0;
 
     std::mutex bufferMutex;
     std::vector<float> audioBuffer;
