@@ -226,6 +226,7 @@ private:
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
 
         if (_this->running) { return; }
+
         if (_this->selectedSerial == "") {
             flog::error("Tried to start HackRF source with empty serial");
             return;

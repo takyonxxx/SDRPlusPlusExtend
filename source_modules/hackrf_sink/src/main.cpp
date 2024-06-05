@@ -4,10 +4,18 @@ class HackRFSinkModule : public ModuleManager::Instance {
 public:
 
     HackRFSinkModule(std::string name):
-        name(name)
+        name(name),
+        enabled(true),
+        sampleRate(2000000),
+        audioSampleRate(44100),
+        interpolation(48 * (sampleRate / _MHZ(2))),
+        freq(100e6),
+        srId(7),
+        bwId(0),
+        amp(true),
+        tx_vga(0),
+        running(false)
     {
-        this->name = name;        
-
         handler.ctx = this;
         handler.selectHandler = menuSelected;
         handler.deselectHandler = menuDeselected;
@@ -159,16 +167,6 @@ public:
         }
         config.release(created);
 
-        // Set default values       
-        freq = 100e06;
-        interpolation = 48 * (sampleRate / _MHZ(2));
-        srId = 7;
-        sampleRate = 2000000;
-        audioSampleRate = 44100;
-        amp = true;
-        tx_vga = 0;
-        bwId = 0;
-
         // Load from config if available and validate
         if (config.conf["devices"][serial].contains("sampleRate")) {
             int psr = config.conf["devices"][serial]["sampleRate"];
@@ -282,18 +280,28 @@ private:
     static void start(void* ctx) {
         HackRFSinkModule* _this = (HackRFSinkModule*)ctx;
         if (_this->running) { return; }
+
+        if (!_this->soapy_hackrf_sink_0){
+            flog::error("HackRF sink not found.");
+            return;
+        }
+
         if (_this->selectedSerial == "") {
             flog::error("Tried to start HackRF sink with empty serial");
             return;
         }
-        // Connections
-        _this->tb->connect((const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0, (const gr::block_sptr&)_this->rational_resampler_xxx_0, 0);
-        _this->tb->connect((const gr::block_sptr&)_this->audio_source_0, 0, (const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0);
-        _this->tb->connect((const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0, (const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0);
-        _this->tb->connect((const gr::block_sptr&)_this->rational_resampler_xxx_0, 0, (const gr::block_sptr&)_this->soapy_hackrf_sink_0, 0);
 
+        if (!_this->selectedSerial.empty()) {
+            _this->tb->lock();
+            _this->tb->connect((const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0, (const gr::block_sptr&)_this->rational_resampler_xxx_0, 0);
+            _this->tb->connect((const gr::block_sptr&)_this->audio_source_0, 0, (const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0);
+            _this->tb->connect((const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0, (const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0);
+            _this->tb->connect((const gr::block_sptr&)_this->rational_resampler_xxx_0, 0, (const gr::block_sptr&)_this->soapy_hackrf_sink_0, 0);
+            _this->tb->unlock();
+        }
         try {
             _this->tb->start();
+            core::setInputSampleRate(_this->sampleRate);
              _this->running = true;
         } catch (const std::exception& e) {
             flog::error("Exception caught while starting hackrf sink top block: {}", e.what());
@@ -322,11 +330,12 @@ private:
     }
 
     static void tune(double freq, void* ctx) {
-        HackRFSinkModule* _this = (HackRFSinkModule*)ctx;       
+        HackRFSinkModule* _this = (HackRFSinkModule*)ctx;
+        _this->freq = freq;
+
         if (_this->running) {
             _this->soapy_hackrf_sink_0->set_frequency(0, freq);
-        }
-        _this->freq = freq;
+        }        
 
         double display_freq; // Change to double for decimal precision
         std::string unit;
