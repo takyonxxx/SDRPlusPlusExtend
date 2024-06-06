@@ -120,6 +120,7 @@ public:
         y_prev = y;
         return y;
     }
+
 };
 
 #endif // HACKRFSOURCEMODULE_H
