@@ -25,9 +25,6 @@
 #include <config.h>
 #include <gui/widgets/stepped_slider.h>
 #include <gui/smgui.h>
-#include "circular_buffer.h"
-#include "constants.h"
-#include "micreader.h"
 
 #ifndef __ANDROID__
 #include <libhackrf/hackrf.h>

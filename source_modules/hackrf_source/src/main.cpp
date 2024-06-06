@@ -1,4 +1,7 @@
 #include "hackrfsourcemodule.h"
+#include "constants.h"
+#include "circular_buffer.h"
+#include "micreader.h"
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:

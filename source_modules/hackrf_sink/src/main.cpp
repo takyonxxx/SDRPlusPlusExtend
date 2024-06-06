@@ -7,8 +7,7 @@ public:
         name(name),
         enabled(true),
         sampleRate(2000000),
-        audioSampleRate(44100),
-        interpolation(48 * (sampleRate / _MHZ(2))),
+        audioSampleRate(44100),        
         freq(100e6),
         srId(7),
         bwId(0),
@@ -33,6 +32,10 @@ public:
         selectBySerial(confSerial);
 
         this->tb = gr::make_top_block("HackRfSinkTopBlock");
+
+        double newSampleRate = sampleRate / 50.0;
+        double resampleRatio = sampleRate / newSampleRate;
+        interpolation = resampleRatio;
 
         this->rational_resampler_xxx_0 = gr::filter::rational_resampler_ccf::make(this->interpolation, 1);
         this->blocks_multiply_const_vxx_0 = gr::blocks::multiply_const_ff::make(4);
