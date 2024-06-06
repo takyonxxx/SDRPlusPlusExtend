@@ -99,26 +99,5 @@ const char* bandwidthsTxt = "1.75MHz\0"
                             "28MHz\0"
                             "Auto\0";
 
-class LowPassFilter {
-private:
-    double alpha;
-    double y_prev;
-
-public:
-    LowPassFilter(double sampleRate, double cutoffFreq) {
-        double dt = 1.0 / sampleRate;
-        double RC = 1.0 / (2 * M_PI * cutoffFreq);
-        alpha = dt / (RC + dt);
-        y_prev = 0.0;
-    }
-
-    double filter(double x) {
-        double y = alpha * x + (1 - alpha) * y_prev;
-        y_prev = y;
-        return y;
-    }
-
-};
-
 #endif // HACKRFSOURCEMODULE_H
 

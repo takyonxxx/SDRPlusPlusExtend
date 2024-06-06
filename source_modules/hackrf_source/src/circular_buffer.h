@@ -48,6 +48,13 @@ public:
         }
     }
 
+    void addData(double data) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        buffer_[tail_] = data;
+        tail_ = (tail_ + 1) % buffer_.size();
+        data_available_.notify_one();
+    }
+
     size_t capacity() const {
         return buffer_.size();
     }

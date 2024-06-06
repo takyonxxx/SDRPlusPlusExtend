@@ -7,7 +7,7 @@ class HackRFSourceModule : public ModuleManager::Instance {
 public:
 
     HackRFSourceModule(std::string name):
-        name(name), circular_buffer(BUF_LEN)
+        name(name), circular_buffer(BUF_LEN / 2)
     {
         this->name = name;
 
@@ -29,6 +29,18 @@ public:
         config.release();
         selectBySerial(confSerial);
         sigpath::sourceManager.registerSource("HackRFSource", &handler);
+
+        for (unsigned long i = 0; i <  BUF_LEN / 2; ++i)
+        {
+            {
+                std::lock_guard<std::mutex> lock(circular_buffer.mutex_);
+                double frequency = 440.0; // Example frequency
+                double sample = std::sin(TWO_PI * frequency * i / sampleRate);
+                circular_buffer.buffer_[circular_buffer.head_] = sample;
+                circular_buffer.head_ = (circular_buffer.head_ + 1) % circular_buffer.buffer_.size();
+            }
+            circular_buffer.data_available_.notify_one();
+        }
 
         micReader = new MicReader(circular_buffer);
         if (!micReader->init()) {
@@ -442,24 +454,55 @@ private:
         volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
         if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
         return 0;
+    }   
+
+    std::vector<float> generate_lowpass_fir_coefficients(float cutoff_freq, int sample_rate, int num_taps) {
+        std::vector<float> coefficients(num_taps);
+        float norm_cutoff = cutoff_freq / (sample_rate / 2.0); // Normalize cutoff frequency
+        int M = num_taps - 1;
+        for (int i = 0; i < num_taps; ++i) {
+            if (i == M / 2) {
+                coefficients[i] = norm_cutoff;
+            } else {
+                coefficients[i] = norm_cutoff * (std::sin(M_PI * norm_cutoff * (i - M / 2)) / (M_PI * norm_cutoff * (i - M / 2)));
+            }
+            coefficients[i] *= 0.54 - 0.46 * std::cos(2 * M_PI * i / M); // Hamming window
+        }
+        return coefficients;
+    }
+
+    std::vector<float> apply_fir_filter(const std::vector<float>& input, const std::vector<float>& coefficients) {
+        int input_size = input.size();
+        int num_taps = coefficients.size();
+        std::vector<float> output(input_size, 0.0f);
+
+        for (int i = num_taps / 2; i < input_size - num_taps / 2; ++i) {
+            for (int j = 0; j < num_taps; ++j) {
+                output[i] += input[i - num_taps / 2 + j] * coefficients[j];
+            }
+        }
+
+        return output;
     }
 
     std::vector<float> rational_resampler(const std::vector<float>& input, int interpolation, int decimation) {
-        std::vector<float> output;
-        int input_size = input.size();
-        int output_size = input_size * interpolation / decimation;
-        output.reserve(output_size);
+        // Calculate output size
+        size_t output_size = input.size() * interpolation / decimation;
+        std::vector<float> output(output_size);
 
-        for (int i = 0; i < output_size; ++i) {
-            float index = static_cast<float>(i) * decimation / interpolation;
-            int index_int = static_cast<int>(index);
-            float frac = index - index_int;
+        // Resampling loop
+        for (size_t i = 0; i < output_size; ++i) {
+            float input_index = i * decimation / interpolation;
+            int lower_index = static_cast<int>(std::floor(input_index));
+            int upper_index = static_cast<int>(std::ceil(input_index));
 
-            if (index_int + 1 < input_size) {
-                float sample = input[index_int] * (1 - frac) + input[index_int + 1] * frac;
-                output.push_back(sample);
+            // Check boundary conditions
+            if (lower_index < 0 || upper_index >= static_cast<int>(input.size())) {
+                output[i] = 0.0f; // Zero-padding for out-of-bounds access
             } else {
-                output.push_back(input[index_int]);
+                // Linear interpolation
+                float t = input_index - lower_index;
+                output[i] = (1 - t) * input[lower_index] + t * input[upper_index];
             }
         }
 
@@ -482,7 +525,7 @@ private:
         output.reserve(input.size());
 
         float phase = 0.0f;
-        float phase_increment = 2 * M_PI * carrier_freq / sample_rate;
+        float phase_increment = TWO_PI * carrier_freq / sample_rate;
 
         for (auto sample : input) {
             phase += phase_increment + sensitivity * sample;
@@ -492,76 +535,84 @@ private:
         return output;
     }
 
-    void apply_modulation_resapmler(int8_t* buffer, uint32_t length) {
+    void apply_modulation(int8_t* buffer, uint32_t length) {
 
         double modulationIndex = 5.0;
         double amplitudeScalingFactor = 1.5;
-        double cutoffFreq = 300.0;
+        double cutoffFreq = _KHZ(300);
         double hackrf_sample_rate = sampleRate;
         double newSampleRate = sampleRate / 50.0;
         double resampleRatio = sampleRate / newSampleRate;
+        double frequency = 1000.0;
 
-        //LowPassFilter filter(hackrf_sample_rate, cutoffFreq);
-
-        std::vector<float> float_buffer;
         std::vector<uint8_t> mic_buffer;
+        std::vector<float> float_buffer;
 
-        while (mic_buffer.size() < length) { // Length ile karşılaştırma yapıldı
+        while (mic_buffer.size() < length / 2) { // Compare with length / 2
             std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
             circular_buffer.data_available_.wait(lock, [&] {
                 return circular_buffer.buffer_.size() - circular_buffer.tail_ >= 1;
             });
 
-            size_t remainingSpace = length - mic_buffer.size(); // Uzunluk düzenlendi
+            size_t remainingSpace = length / 2 - mic_buffer.size(); // Adjust remainingSpace calculation
             size_t samplesToCopy = std::min(remainingSpace, circular_buffer.buffer_.size() - circular_buffer.tail_);
             mic_buffer.insert(mic_buffer.end(), circular_buffer.buffer_.begin() + circular_buffer.tail_,
                               circular_buffer.buffer_.begin() + circular_buffer.tail_ + samplesToCopy);
             circular_buffer.tail_ = (circular_buffer.tail_ + samplesToCopy) % circular_buffer.buffer_.size();
         }
 
+        std::cout << "mic_buffer " << mic_buffer.size() << std::endl;
+
+        // Reserve space for half the size of mic_buffer
         float_buffer.reserve(mic_buffer.size());
-        for (auto sample : mic_buffer) {
-            float_buffer.push_back(static_cast<float>(sample - 128) / 128.0f); // Convert uint8_t to float and center to 0
+
+        // Iterate over only the first half of mic_buffer
+        for (size_t i = 0; i < mic_buffer.size(); ++i) {
+            // float_buffer.push_back(std::sin(TWO_PI * frequency * i / hackrf_sample_rate));
+            float_buffer.push_back(static_cast<float>(mic_buffer[i] - 128) / 128.0f); // Convert uint8_t to float and center to 0
         }
 
-//        float_buffer.reserve(length);
-//        float freq = 1000.0;
+        // Apply low-pass filter before modulation
+        int num_taps = 101; // Number of taps for FIR filter
+        std::vector<float> filter_coefficients = generate_lowpass_fir_coefficients(cutoffFreq, hackrf_sample_rate, num_taps);
+        std::vector<float> filtered_buffer = apply_fir_filter(float_buffer, filter_coefficients);
 
-//        for (size_t i = 0; i < length; ++i) {
-//            float sample = std::sin(2 * M_PI * freq * i / hackrf_sample_rate); // 1000 Hz'lik sinüs dalgası
-//            float_buffer.push_back(sample);
-//        }
+        // // Apply frequency modulation
+        // float sensitivity = modulationIndex;
+        // std::vector<float> modulated_audio = frequency_modulator(float_buffer, sensitivity, hackrf_sample_rate, 0);
 
-        float sensitivity = modulationIndex;
-        std::vector<float> modulated_audio = frequency_modulator(float_buffer, sensitivity, hackrf_sample_rate, cutoffFreq);
+        // // Apply amplitude scaling
+        // std::vector<float> multiplied_audio = multiply_const(modulated_audio, amplitudeScalingFactor);
 
-        std::vector<float> multiplied_audio = multiply_const(modulated_audio, amplitudeScalingFactor);
+        // // Resample audio
+        // int interpolation = 2;//static_cast<int>(std::ceil(resampleRatio));
+        // int decimation = 1;
+        // std::vector<float> resampled_audio = rational_resampler(multiplied_audio, interpolation, decimation);
 
-        int interpolation = static_cast<int>(std::ceil(resampleRatio));
-        int decimation = 1;
-        std::vector<float> resampled_audio = rational_resampler(multiplied_audio, interpolation, decimation);
+        // // Apply low-pass filter before modulation
+        // int num_taps = 101; // Number of taps for FIR filter
+        // std::vector<float> filter_coefficients = generate_lowpass_fir_coefficients(cutoffFreq, hackrf_sample_rate, num_taps);
+        // std::vector<float> filtered_buffer = apply_fir_filter(resampled_audio, filter_coefficients);
 
-        for (size_t i = 0; i < length && i < resampled_audio.size(); ++i) {
-            buffer[i] = static_cast<int8_t>(std::max(std::min(resampled_audio[i] * 128.0f + 128.0f, 255.0f), 0.0f)); // Convert float back to uint8_t
+        // for (size_t i = 0; i < length && i < filtered_buffer.size(); ++i) {
+        //     buffer[i] = static_cast<int8_t>(std::max(std::min(filtered_buffer[i] * 127.0f, 127.0f), -127.0f));
+        // }
+
+        for (uint32_t sampleIndex = 0; sampleIndex < length / 2; ++sampleIndex) {
+            double time = static_cast<double>(sampleIndex) / hackrf_sample_rate;
+            // double audioSignal = std::sin(TWO_PI * frequency * time);
+            auto audioSignal = filtered_buffer[sampleIndex];
+            double modulatedPhase = TWO_PI * time + modulationIndex * audioSignal;
+            double inPhaseComponent = cos(modulatedPhase) * amplitudeScalingFactor;
+            double quadratureComponent = sin(modulatedPhase) * amplitudeScalingFactor;
+            buffer[sampleIndex * 2] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
+            buffer[sampleIndex * 2 + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
         }
 
-//        for (uint32_t sampleIndex = 0; sampleIndex < length; sampleIndex += 2) {
-//            double time = (current_tx_sample + sampleIndex / 2) / hackrf_sample_rate;
-//            double audioSignal = sin(2 * M_PI * 440 * time);
-//            // int8_t sample = mic_buffer[sampleIndex / 2];
-//            // double audioSignal = (static_cast<double>(sample * 1.5) / 127.0) - 1.0;
-//            double filteredAudioSignal = filter.filter(audioSignal);
-//            double modulatedPhase = 2 * M_PI * time + modulationIndex * filteredAudioSignal;
-//            double inPhaseComponent = cos(modulatedPhase) * amplitudeScalingFactor;
-//            double quadratureComponent = sin(modulatedPhase) * amplitudeScalingFactor;
-//            buffer[sampleIndex] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
-//            buffer[sampleIndex + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
-//        }
-//        current_tx_sample += length / 2;
     }
 
     int send_mic_tx(int8_t* buffer, uint32_t length) {
-        apply_modulation_resapmler(buffer, length);
+        apply_modulation(buffer, length);
         return 0;
     }
 

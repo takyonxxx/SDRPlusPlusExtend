@@ -4,6 +4,7 @@
 #include <iostream>
 #include <portaudio.h>
 #include "circular_buffer.h"
+#include "constants.h"
 
 class MicReader {
 public:
@@ -106,14 +107,14 @@ private:
                           void* userData) {
         MicReader* micReader = static_cast<MicReader*>(userData);        
         const int8_t* in = static_cast<const int8_t*>(inputBuffer);
-        for (unsigned long i = 0; i < framesPerBuffer; ++i) {
-            {
-                std::lock_guard<std::mutex> lock(micReader->circular_buffer_.mutex_);
-                micReader->circular_buffer_.buffer_[micReader->circular_buffer_.head_] = in[i];
-                micReader->circular_buffer_.head_ = (micReader->circular_buffer_.head_ + 1) % micReader->circular_buffer_.buffer_.size();
-            }
-            micReader->circular_buffer_.data_available_.notify_one();
-        }
+        // for (unsigned long i = 0; i < framesPerBuffer; ++i) {
+        //     {
+        //         std::lock_guard<std::mutex> lock(micReader->circular_buffer_.mutex_);
+        //         micReader->circular_buffer_.buffer_[micReader->circular_buffer_.head_] = in[i];
+        //         micReader->circular_buffer_.head_ = (micReader->circular_buffer_.head_ + 1) % micReader->circular_buffer_.buffer_.size();
+        //     }
+        //     micReader->circular_buffer_.data_available_.notify_one();
+        // }
         return paContinue;
     }
 };
