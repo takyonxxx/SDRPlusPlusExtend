@@ -1,4 +1,5 @@
 #pragma once
+#include <iostream>
 #include <string.h>
 #include <mutex>
 #include <condition_variable>
@@ -64,6 +65,8 @@ namespace dsp {
             }
             rdyCV.notify_all();
 
+            std::cout << "Buffer swapped. Data size: " << size << std::endl;
+
             return true;
         }
 
@@ -73,6 +76,14 @@ namespace dsp {
             rdyCV.wait(lck, [this] { return (dataReady || readerStop); });
 
             return (readerStop ? -1 : dataSize);
+        }
+
+        virtual inline int readSpecificSize(int size) {
+            std::unique_lock<std::mutex> lck(rdyMtx);
+            rdyCV.wait(lck, [this, size] { return (dataReady && dataSize >= size) || readerStop; });
+
+            if (readerStop) return -1;
+            return size;
         }
 
         virtual inline void flush() {

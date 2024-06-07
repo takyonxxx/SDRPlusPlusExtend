@@ -1,17 +1,107 @@
 #include "hackrfsourcemodule.h"
 #include "constants.h"
-#include "circular_buffer.h"
-#include "portaudiosource.h"
+#include <portaudio.h>
+
+class PortAudioSource {
+public:
+    PortAudioSource(dsp::stream<dsp::complex_t>& stream_buffer) : stream_buffer(stream_buffer), stream(nullptr), isRecording(false)
+    {
+        err = Pa_Initialize();
+        if (err != paNoError) {
+            std::cerr << "PortAudioSource initialization failed: " << Pa_GetErrorText(err) << std::endl;
+            return;
+        }
+
+        PaStreamParameters inputParameters;
+        inputParameters.device = Pa_GetDefaultInputDevice();
+        if (inputParameters.device == paNoDevice) {
+            std::cerr << "Error: No default input device found!" << std::endl;
+            Pa_Terminate();
+            return;
+        }
+
+        const PaDeviceInfo* deviceInfo = Pa_GetDeviceInfo(inputParameters.device);
+        std::cout << "Using input device: " << deviceInfo->name << std::endl;
+
+        inputParameters.channelCount = 1; // Mono input
+        inputParameters.sampleFormat = paInt8;
+        inputParameters.suggestedLatency = deviceInfo->defaultHighInputLatency;
+        inputParameters.hostApiSpecificStreamInfo = nullptr;
+
+        err = Pa_OpenStream(&stream, &inputParameters, nullptr, SAMPLE_RATE, paFramesPerBufferUnspecified, paClipOff, &PortAudioSource::paCallback, this);
+        if (err != paNoError) {
+            std::cerr << "Failed to open audio stream: " << Pa_GetErrorText(err) << std::endl;
+            Pa_Terminate();
+            return;
+        }
+    }
+
+    ~PortAudioSource()
+    {
+        if (stream) {
+            Pa_CloseStream(stream);
+            Pa_Terminate();
+        }
+        stream = nullptr;
+    }
+
+    bool start()
+    {
+        err = Pa_StartStream(stream);
+        if (err != paNoError) {
+            std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
+            Pa_Terminate();
+            return false;
+        }
+        isRecording = true;
+        std::cerr << "PortAudioSource started." << std::endl;
+        return true;
+    }
+
+    bool stop()
+    {
+        if (stream) {
+            Pa_StopStream(stream);
+        }
+        std::cout << "PortAudioSource stopped." << std::endl;
+        isRecording = false;
+        return true;
+    }
+
+private:
+    PaStream* stream;
+    PaError err;
+    bool isRecording;
+    dsp::stream<dsp::complex_t>& stream_buffer;
+
+    static const int SAMPLE_RATE = 44100;
+    static const int FRAMES_PER_BUFFER = 256;
+
+    static int paCallback(const void* inputBuffer, void* outputBuffer,
+                          unsigned long framesPerBuffer,
+                          const PaStreamCallbackTimeInfo* timeInfo,
+                          PaStreamCallbackFlags statusFlags,
+                          void* userData) {
+        PortAudioSource* _this = static_cast<PortAudioSource*>(userData);
+        const int8_t* in = static_cast<const int8_t*>(inputBuffer);
+        int8_t* out = static_cast<int8_t*>(outputBuffer);
+
+        if (in != nullptr) {
+            std::memcpy(_this->stream_buffer.writeBuf, inputBuffer, framesPerBuffer * sizeof(dsp::complex_t));
+            _this->stream_buffer.swap(framesPerBuffer);
+        }
+        return paContinue;
+    }
+
+};
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:
 
     HackRFSourceModule(std::string name):
-        name(name), circular_buffer(BUF_LEN / 2)
+        name(name)
     {
         this->name = name;
-
-        portAudioSource = new PortAudioSource(circular_buffer);
 
         hackrf_init();
 
@@ -24,6 +114,8 @@ public:
         handler.tuneHandler = tune;
         handler.stream = &stream;
 
+        portAudioSource = new PortAudioSource(stream);
+
         refresh();
 
         config.acquire();
@@ -34,15 +126,16 @@ public:
     }
 
     ~HackRFSourceModule() {
-        stop(this);
-        hackrf_exit();
-        sigpath::sourceManager.unregisterSource("HackRF");
 
         if(portAudioSource)
         {
             portAudioSource->stop();
             delete portAudioSource;
         }
+
+        stop(this);
+        hackrf_exit();
+        sigpath::sourceManager.unregisterSource("HackRF");
     }
 
     void startRecording() {
@@ -279,7 +372,7 @@ private:
 
         if(_this->ptt)
         {
-            hackrf_stop_tx(_this->openDev);           
+            hackrf_stop_tx(_this->openDev);
             _this->stopRecording();
         }
         else
@@ -436,14 +529,7 @@ private:
             config.conf["devices"][_this->selectedSerial]["amp"] = _this->amp;
             config.release(true);
         }
-    }
-
-    static int callback_rx(hackrf_transfer* transfer) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->rx_ctx;
-        volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
-        if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
-        return 0;
-    }   
+    }    
 
     std::vector<float> generate_lowpass_fir_coefficients(float cutoff_freq, int sample_rate, int num_taps) {
         std::vector<float> coefficients(num_taps);
@@ -522,7 +608,14 @@ private:
         }
 
         return output;
-    }   
+    }
+
+    static int callback_rx(hackrf_transfer* transfer) {
+        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->rx_ctx;
+        volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
+        if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
+        return 0;
+    }
 
     void apply_modulation(int8_t* buffer, uint32_t length) {
 
@@ -537,28 +630,27 @@ private:
         std::vector<uint8_t> mic_buffer;
         std::vector<float> float_buffer;
 
-        while (mic_buffer.size() < length / 2) { // Compare with length / 2
-            std::unique_lock<std::mutex> lock(circular_buffer.mutex_);
-            circular_buffer.data_available_.wait(lock, [&] {
-                return circular_buffer.buffer_.size() - circular_buffer.tail_ >= 1;
-            });
-
-            size_t remainingSpace = length / 2 - mic_buffer.size(); // Adjust remainingSpace calculation
-            size_t samplesToCopy = std::min(remainingSpace, circular_buffer.buffer_.size() - circular_buffer.tail_);
-            mic_buffer.insert(mic_buffer.end(), circular_buffer.buffer_.begin() + circular_buffer.tail_,
-                              circular_buffer.buffer_.begin() + circular_buffer.tail_ + samplesToCopy);
-            circular_buffer.tail_ = (circular_buffer.tail_ + samplesToCopy) % circular_buffer.buffer_.size();
+        int size = BUF_LEN / 2;
+        int readSize = stream.readSpecificSize(size);
+        if (readSize > 0) {
+            const dsp::complex_t* readBuffer = stream.readBuf;
+            mic_buffer.resize(readSize * sizeof(dsp::complex_t));
+            std::memcpy(mic_buffer.data(), readBuffer, readSize * sizeof(dsp::complex_t));
+            stream.flush();  // Flush after reading
         }
-
         std::cout << "mic_buffer " << mic_buffer.size() << std::endl;
 
-        // Reserve space for half the size of mic_buffer
-        float_buffer.reserve(mic_buffer.size());
+//        float_buffer.reserve(mic_buffer.size() / sizeof(float));
+//        for (size_t i = 0; i < mic_buffer.size(); i += sizeof(float)) {
+//            // float_buffer.push_back(std::sin(TWO_PI * frequency * i / hackrf_sample_rate));
+//        }
 
-        // Iterate over only the first half of mic_buffer
-        for (size_t i = 0; i < mic_buffer.size(); ++i) {
-            // float_buffer.push_back(std::sin(TWO_PI * frequency * i / hackrf_sample_rate));
-            float_buffer.push_back(static_cast<float>(mic_buffer[i] - 128) / 128.0f); // Convert uint8_t to float and center to 0
+        float_buffer.reserve(mic_buffer.size() / sizeof(float)); // Reserve space for the float_buffer
+        for (size_t i = 0; i < mic_buffer.size(); i += sizeof(float)) {
+            float value;
+            std::memcpy(&value, mic_buffer.data() + i, sizeof(float));
+            value = (value - 128.0f) / 128.0f;
+            float_buffer.push_back(value);
         }
 
         // Apply low-pass filter before modulation
@@ -630,8 +722,7 @@ private:
     float tx_vga = 0;
     int current_tx_sample = 0;
 
-    std::mutex bufferMutex;
-    std::vector<float> audioBuffer;
+    PortAudioSource *portAudioSource;
 
 #ifdef __ANDROID__
     int devFd = -1;
@@ -639,11 +730,8 @@ private:
 
     std::vector<std::string> devList;
     std::string devListTxt;
-
-private:
-    CircularBuffer circular_buffer;
-    PortAudioSource *portAudioSource;
 };
+
 
 MOD_EXPORT void _INIT_() {
     json def = json({});

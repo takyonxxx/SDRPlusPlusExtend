@@ -95,17 +95,18 @@ public:
 #endif
             try {
                 // Get info
-                auto info = audio.getDeviceInfo(i);
+                auto info = audio.getDeviceInfo(i);                
 
 #if !defined(RTAUDIO_VERSION_MAJOR) || RTAUDIO_VERSION_MAJOR < 6
                 if (!info.probed) { continue; }
 #endif
                 // Check that it has a stereo input
-                if (info.inputChannels < 2) { continue; }
+                if (info.inputChannels > 1) { continue; }
 
                 // Save info
                 DeviceInfo dinfo = { info, i };
                 devices.define(info.name, info.name, dinfo);
+                std::cout << info.name << std::endl;
             }
             catch (const std::exception& e) {
                 flog::error("Error getting audio device ({}) info: {}", i, e.what());
@@ -184,11 +185,11 @@ private:
     static void start(void* ctx) {
         AudioSourceModule* _this = (AudioSourceModule*)ctx;
         if (_this->running) { return; }
-        
+
         // Stream options
         RtAudio::StreamParameters parameters;
         parameters.deviceId = _this->devices[_this->devId].id;
-        parameters.nChannels = 2;
+        parameters.nChannels = 1;
         unsigned int bufferFrames = _this->sampleRate / 200;
         RtAudio::StreamOptions opts;
         opts.flags = RTAUDIO_MINIMIZE_LATENCY;
@@ -203,7 +204,7 @@ private:
         catch (const std::exception& e) {
             flog::error("Error opening audio device: {}", e.what());
         }
-        
+
         flog::info("AudioSourceModule '{}': Start!", _this->name);
     }
 
