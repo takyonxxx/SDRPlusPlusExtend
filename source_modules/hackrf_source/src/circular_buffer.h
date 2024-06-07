@@ -1,5 +1,6 @@
 #ifndef CIRCULAR_BUFFER_H
 #define CIRCULAR_BUFFER_H
+#include <iostream>
 #include <vector>
 #include <mutex>
 #include <queue>
@@ -20,6 +21,7 @@ public:
             full_ = head_ == tail_;
         }
         data_available_.notify_all();
+        std::cout << "Data written to circular buffer. New head: " << head_ << ", new tail: " << tail_ << std::endl;
     }
 
     void read(std::vector<uint8_t>& data, size_t length) {
@@ -34,6 +36,8 @@ public:
 
         tail_ = (tail_ + length) % buffer_.size();
         full_ = false;
+
+        std::cout << "Read " << length << " bytes from circular buffer. New tail: " << tail_ << std::endl;
     }
 
     size_t size() const {
@@ -46,13 +50,6 @@ public:
         } else {
             return buffer_.size() - tail_ + head_;
         }
-    }
-
-    void addData(double data) {
-        std::unique_lock<std::mutex> lock(mutex_);
-        buffer_[tail_] = data;
-        tail_ = (tail_ + 1) % buffer_.size();
-        data_available_.notify_one();
     }
 
     size_t capacity() const {

@@ -1,7 +1,7 @@
 #include "hackrfsourcemodule.h"
 #include "constants.h"
 #include "circular_buffer.h"
-#include "micreader.h"
+#include "portaudiosource.h"
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:
@@ -10,6 +10,8 @@ public:
         name(name), circular_buffer(BUF_LEN / 2)
     {
         this->name = name;
+
+        portAudioSource = new PortAudioSource(circular_buffer);
 
         hackrf_init();
 
@@ -29,23 +31,6 @@ public:
         config.release();
         selectBySerial(confSerial);
         sigpath::sourceManager.registerSource("HackRFSource", &handler);
-
-        for (unsigned long i = 0; i <  BUF_LEN / 2; ++i)
-        {
-            {
-                std::lock_guard<std::mutex> lock(circular_buffer.mutex_);
-                double frequency = 440.0; // Example frequency
-                double sample = std::sin(TWO_PI * frequency * i / sampleRate);
-                circular_buffer.buffer_[circular_buffer.head_] = sample;
-                circular_buffer.head_ = (circular_buffer.head_ + 1) % circular_buffer.buffer_.size();
-            }
-            circular_buffer.data_available_.notify_one();
-        }
-
-        micReader = new MicReader(circular_buffer);
-        if (!micReader->init()) {
-            std::cerr << "Error initializing MicReader!" << std::endl;
-        }
     }
 
     ~HackRFSourceModule() {
@@ -53,22 +38,24 @@ public:
         hackrf_exit();
         sigpath::sourceManager.unregisterSource("HackRF");
 
-        if(micReader)
+        if(portAudioSource)
         {
-            stopRecording();
-            micReader->finish();
-            delete micReader;
+            portAudioSource->stop();
+            delete portAudioSource;
         }
     }
 
     void startRecording() {
-        if (!micReader->startRecord()) {
-            std::cerr << "Error starting recording!" << std::endl;
+
+        if (!portAudioSource->start()) {
+            std::cerr << "Error start portAudioSource!" << std::endl;
         }
     }
 
     void stopRecording() {
-        micReader->stopRecord();
+        if (!portAudioSource->stop()) {
+            std::cerr << "Error stop portAudioSource!" << std::endl;
+        }
     }
 
     std::string findProjectFolder(const std::string& marker) {
@@ -231,6 +218,7 @@ private:
 
     static void start(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
+        _this->startRecording();
 
         if (_this->running) { return; }
 
@@ -252,7 +240,7 @@ private:
         _this->current_tx_sample = 0;
         if(_this->ptt)
         {
-            _this->biasT = true;           
+            _this->biasT = true;
             _this->startRecording();
         }
         else
@@ -284,6 +272,7 @@ private:
 
     static void stop(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
+        _this->stopRecording();
 
         if (!_this->running) { return; }        
         _this->stream.stopWriter();
@@ -533,7 +522,7 @@ private:
         }
 
         return output;
-    }
+    }   
 
     void apply_modulation(int8_t* buffer, uint32_t length) {
 
@@ -653,8 +642,7 @@ private:
 
 private:
     CircularBuffer circular_buffer;
-    std::thread mic_thread;
-    MicReader *micReader;
+    PortAudioSource *portAudioSource;
 };
 
 MOD_EXPORT void _INIT_() {

@@ -10,7 +10,8 @@ target_sources(hackrf_source
     src/constants.h
     src/circular_buffer.h
     src/hackrfsourcemodule.h
-    src/micreader.h
+    src/portaudiosource.h
+
 )
 
 if (MSVC)
