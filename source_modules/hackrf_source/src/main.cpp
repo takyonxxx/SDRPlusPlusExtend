@@ -24,7 +24,7 @@ public:
         std::cout << "Using input device: " << deviceInfo->name << std::endl;
 
         inputParameters.channelCount = 2;
-        inputParameters.sampleFormat = paInt8;
+        inputParameters.sampleFormat = paFloat32;
         inputParameters.suggestedLatency = deviceInfo->defaultHighInputLatency;
         inputParameters.hostApiSpecificStreamInfo = nullptr;
 
@@ -75,21 +75,20 @@ private:
     dsp::stream<dsp::complex_t>& stream_buffer;
 
     static const int SAMPLE_RATE = 44100;
-    static const int FRAMES_PER_BUFFER = 512;
+    static const int FRAMES_PER_BUFFER = 256;
 
     static int paCallback(const void* inputBuffer, void* outputBuffer,
                           unsigned long framesPerBuffer,
                           const PaStreamCallbackTimeInfo* timeInfo,
                           PaStreamCallbackFlags statusFlags,
                           void* userData) {
-        PortAudioSource* _this = static_cast<PortAudioSource*>(userData);
-        const int8_t* in = static_cast<const int8_t*>(inputBuffer);
-        // int8_t* out = static_cast<int8_t*>(outputBuffer);
+        PortAudioSource* _this = static_cast<PortAudioSource*>(userData);       
 
-        if (in != nullptr) {
-            volk_8i_s32f_convert_32f((float*)_this->stream_buffer.writeBuf, in, 128.0f, framesPerBuffer);
-            if (!_this->stream_buffer.swap(framesPerBuffer)) { return -1; }
-        }
+        // volk_8i_s32f_convert_32f((float*)_this->stream_buffer.writeBuf, in, 128.0f, framesPerBuffer);
+        // if (!_this->stream_buffer.swap(framesPerBuffer)) { return -1; }
+
+        memcpy(_this->stream_buffer.writeBuf, inputBuffer, framesPerBuffer * sizeof(float));
+        _this->stream_buffer.swap(framesPerBuffer);
 
         return paContinue;
     }
@@ -540,11 +539,11 @@ private:
     void apply_modulation(int8_t* buffer, uint32_t length) {
 
         double modulationIndex = 5.0;
-        double amplitudeScalingFactor = 1.5;
-        double cutoffFreq = _KHZ(75);
-        double hackrf_sample_rate = sampleRate;
+        double amplitudeScalingFactor = 2.0;
+        double audioSampleRate = 44100.0;
         double newSampleRate = sampleRate / 48.0;
-        double resampleRatio = sampleRate / newSampleRate;
+        double interpolation = sampleRate / newSampleRate;
+        int decimation = 1;
 
         int size = BUF_LEN / 2;
 
@@ -554,20 +553,18 @@ private:
             float_buffer.insert(float_buffer.end(), additional_data.begin(), additional_data.end());
         }
 
-        // int num_taps = 101; // Number of taps for FIR filter
-        // std::vector<float> filter_coefficients = generate_lowpass_fir_coefficients(cutoffFreq, hackrf_sample_rate, num_taps);
-        // std::vector<float> filtered_buffer = apply_fir_filter(float_buffer, filter_coefficients);
+        std::cout << "Mic Size : " << float_buffer.size() << std::endl;
 
-        // Apply frequency modulation
-        float sensitivity = modulationIndex;
-        std::vector<float> modulated_audio = frequency_modulator(float_buffer, sensitivity, hackrf_sample_rate, 0);
+        float sensitivity = modulationIndex; //* (freq / audioSampleRate);
+        std::vector<float> modulated_audio = frequency_modulator(float_buffer, sensitivity);
+
+        // float cutoff_freq = 0.5 * 44100; // Set cutoff frequency to Nyquist frequency
+        // std::vector<float> filtered_audio = low_pass_filter(modulated_audio, cutoff_freq, 44100);
 
         // Apply amplitude scaling
         std::vector<float> multiplied_audio = multiply_const(modulated_audio, amplitudeScalingFactor);
 
         // Resample audio
-        int interpolation = static_cast<int>(std::ceil(resampleRatio));
-        int decimation = 1;
         std::vector<float> resampled_audio = rational_resampler(multiplied_audio, interpolation, decimation);
 
         for (size_t i = 0; i < length / 2 && i * 2 + 1 < resampled_audio.size(); ++i) {

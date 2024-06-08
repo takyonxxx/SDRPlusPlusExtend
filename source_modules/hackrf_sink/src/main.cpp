@@ -7,7 +7,8 @@ public:
         name(name),
         enabled(true),
         sampleRate(2000000),
-        audioSampleRate(44100),        
+        audioSampleRate(44100),
+        decimation(1),
         freq(100e6),
         srId(7),
         bwId(0),
@@ -35,12 +36,12 @@ public:
 
         double newSampleRate = sampleRate / 50.0;
         double resampleRatio = sampleRate / newSampleRate;
-        interpolation = resampleRatio;
+        this->interpolation = resampleRatio;
 
-        this->rational_resampler_xxx_0 = gr::filter::rational_resampler_ccf::make(this->interpolation, 1);
+        this->rational_resampler_xxx_0 = gr::filter::rational_resampler_ccf::make(this->interpolation, decimation);
         this->blocks_multiply_const_vxx_0 = gr::blocks::multiply_const_ff::make(4);
         this->audio_source_0 = gr::audio::source::make(this->audioSampleRate, "", true);
-        this->analog_frequency_modulator_fc_0 = gr::analog::frequency_modulator_fc::make(1.5);
+        this->analog_frequency_modulator_fc_0 = gr::analog::frequency_modulator_fc::make(2.5);
 
         sigpath::sourceManager.registerSource("HackRFSink", &handler);
         flog::info("{} Sample rate: {} Hz, Frequency: {} Hz BandWidth: {} Hz", this->name, this->sampleRate, this->freq, this->bandwidthIdToBw(this->bwId));
@@ -369,6 +370,7 @@ private:
     int sampleRate;
     int audioSampleRate;
     double interpolation;
+    int decimation;
     SourceManager::SourceHandler handler;
     bool running = false;
     double freq;

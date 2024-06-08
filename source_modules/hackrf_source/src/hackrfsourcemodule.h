@@ -99,53 +99,29 @@ const char* bandwidthsTxt = "1.75MHz\0"
                             "28MHz\0"
                             "Auto\0";
 
-std::vector<float> generate_lowpass_fir_coefficients(float cutoff_freq, int sample_rate, int num_taps) {
-    std::vector<float> coefficients(num_taps);
-    float norm_cutoff = cutoff_freq / (sample_rate / 2.0); // Normalize cutoff frequency
-    int M = num_taps - 1;
-    for (int i = 0; i < num_taps; ++i) {
-        if (i == M / 2) {
-            coefficients[i] = norm_cutoff;
+std::vector<float> low_pass_filter(const std::vector<float>& input, float cutoff_freq, float sample_rate) {
+    const int filter_order = 101; // Define filter order
+    std::vector<float> filter_coeffs(filter_order);
+
+    float norm_cutoff = cutoff_freq / (sample_rate / 2.0);
+    for (int i = 0; i < filter_order; ++i) {
+        if (i == (filter_order - 1) / 2) {
+            filter_coeffs[i] = norm_cutoff;
         } else {
-            coefficients[i] = norm_cutoff * (std::sin(M_PI * norm_cutoff * (i - M / 2)) / (M_PI * norm_cutoff * (i - M / 2)));
+            float arg = M_PI * norm_cutoff * (i - (filter_order - 1) / 2);
+            filter_coeffs[i] = norm_cutoff * (std::sin(arg) / arg);
         }
-        coefficients[i] *= 0.54 - 0.46 * std::cos(2 * M_PI * i / M); // Hamming window
-    }
-    return coefficients;
-}
-
-std::vector<float> apply_fir_filter(const std::vector<float>& input, const std::vector<float>& coefficients) {
-    int input_size = input.size();
-    int num_taps = coefficients.size();
-    std::vector<float> output(input_size, 0.0f);
-
-    for (int i = num_taps / 2; i < input_size - num_taps / 2; ++i) {
-        for (int j = 0; j < num_taps; ++j) {
-            output[i] += input[i - num_taps / 2 + j] * coefficients[j];
-        }
+        filter_coeffs[i] *= (0.54 - 0.46 * std::cos(2 * M_PI * i / (filter_order - 1))); // Hamming window
     }
 
-    return output;
-}
+    std::vector<float> output(input.size(), 0); // Output size is same as input
 
-std::vector<float> rational_resampler(const std::vector<float>& input, int interpolation, int decimation) {
-    // Calculate output size
-    size_t output_size = input.size() * interpolation / decimation;
-    std::vector<float> output(output_size);
-
-    // Resampling loop
-    for (size_t i = 0; i < output_size; ++i) {
-        float input_index = i * decimation / interpolation;
-        int lower_index = static_cast<int>(std::floor(input_index));
-        int upper_index = static_cast<int>(std::ceil(input_index));
-
-        // Check boundary conditions
-        if (lower_index < 0 || upper_index >= static_cast<int>(input.size())) {
-            output[i] = 0.0f; // Zero-padding for out-of-bounds access
-        } else {
-            // Linear interpolation
-            float t = input_index - lower_index;
-            output[i] = (1 - t) * input[lower_index] + t * input[upper_index];
+    // Convolution with filter coefficients
+    for (size_t i = 0; i < input.size(); ++i) {
+        for (int j = 0; j < filter_order; ++j) {
+            if (i + j < input.size()) {
+                output[i] += input[i + j] * filter_coeffs[j];
+            }
         }
     }
 
@@ -163,18 +139,36 @@ std::vector<float> multiply_const(const std::vector<float>& input, float constan
     return output;
 }
 
-std::vector<float> frequency_modulator(const std::vector<float>& input, float sensitivity, float sample_rate, float carrier_freq) {
+std::vector<float> rational_resampler(const std::vector<float>& input, double interpolation, int decimation) {
+    size_t output_size = static_cast<size_t>(input.size() * interpolation / decimation);
+    std::vector<float> output(output_size);
+
+    for (size_t i = 0; i < output_size; ++i) {
+        double input_index = i * decimation / interpolation;
+        int lower_index = static_cast<int>(input_index);
+        int upper_index = lower_index + 1;
+
+        // Check boundary conditions
+        if (lower_index < 0 || upper_index >= static_cast<int>(input.size())) {
+            output[i] = 0.0f; // Zero-padding for out-of-bounds access
+        } else {
+            double t = input_index - lower_index;
+            output[i] = (1.0 - t) * input[lower_index] + t * input[upper_index];
+        }
+    }
+
+    return output;
+}
+
+std::vector<float> frequency_modulator(const std::vector<float>& input, float sensitivity) {
     std::vector<float> output;
     output.reserve(input.size());
 
     float phase = 0.0f;
-    float phase_increment = 2 * M_PI * carrier_freq / sample_rate;
-
     for (auto sample : input) {
-        phase += phase_increment + sensitivity * sample;
+        phase += sensitivity * sample;
         output.push_back(std::sin(phase));
     }
-
     return output;
 }
 
