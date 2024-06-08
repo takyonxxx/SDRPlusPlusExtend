@@ -561,11 +561,11 @@ private:
         float sensitivity = modulationIndex; //* (freq / audioSampleRate);
         std::vector<float> modulated_audio = frequency_modulator(float_buffer, sensitivity);
 
-        // float cutoff_freq = 0.5 * 44100; // Set cutoff frequency to Nyquist frequency
-        // std::vector<float> filtered_audio = low_pass_filter(modulated_audio, cutoff_freq, 44100);
+        float cutoff_freq = 1.0 * 44100; // Set cutoff frequency to Nyquist frequency
+        std::vector<float> filtered_audio = low_pass_filter(modulated_audio, cutoff_freq, 44100);
 
         // Apply amplitude scaling
-        std::vector<float> multiplied_audio = multiply_const(modulated_audio, amplitudeScalingFactor);
+        std::vector<float> multiplied_audio = multiply_const(filtered_audio, amplitudeScalingFactor);
 
         // Resample audio
         std::vector<float> resampled_audio = rational_resampler(multiplied_audio, interpolation, decimation);
