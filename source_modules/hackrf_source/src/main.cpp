@@ -539,9 +539,9 @@ private:
     void apply_modulation(int8_t* buffer, uint32_t length) {
 
         double modulationIndex = 5.0;
-        double amplitudeScalingFactor = 2.0;
+        double amplitudeScalingFactor = 1.5;
         double audioSampleRate = 44100.0;
-        double newSampleRate = sampleRate / 48.0;
+        double newSampleRate = sampleRate / 60.0;
         double interpolation = sampleRate / newSampleRate;
         int decimation = 1;
 
@@ -553,7 +553,10 @@ private:
             float_buffer.insert(float_buffer.end(), additional_data.begin(), additional_data.end());
         }
 
-        std::cout << "Mic Size : " << float_buffer.size() << std::endl;
+        // std::cout << "Mic Size : " << float_buffer.size() << std::endl;
+        // for (auto sample : float_buffer) {
+        //     std::cout << sample << std::endl;
+        // }
 
         float sensitivity = modulationIndex; //* (freq / audioSampleRate);
         std::vector<float> modulated_audio = frequency_modulator(float_buffer, sensitivity);
