@@ -75,7 +75,7 @@ private:
     dsp::stream<dsp::complex_t>& stream_buffer;
 
     static const int SAMPLE_RATE = 44100;
-    static const int FRAMES_PER_BUFFER = 256;
+    static const int FRAMES_PER_BUFFER = 512;
 
     static int paCallback(const void* inputBuffer, void* outputBuffer,
                           unsigned long framesPerBuffer,
@@ -546,7 +546,7 @@ private:
         double newSampleRate = sampleRate / 48.0;
         double resampleRatio = sampleRate / newSampleRate;
 
-        int size = BUF_LEN;
+        int size = BUF_LEN / 2;
 
         std::vector<float> float_buffer = stream.readBufferToVector();
         while (float_buffer.size() < size) {
