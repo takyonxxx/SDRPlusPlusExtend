@@ -23,12 +23,12 @@ public:
         const PaDeviceInfo* deviceInfo = Pa_GetDeviceInfo(inputParameters.device);
         std::cout << "Using input device: " << deviceInfo->name << std::endl;
 
-        inputParameters.channelCount = 1; // Mono input
+        inputParameters.channelCount = 2;
         inputParameters.sampleFormat = paInt8;
         inputParameters.suggestedLatency = deviceInfo->defaultHighInputLatency;
         inputParameters.hostApiSpecificStreamInfo = nullptr;
 
-        err = Pa_OpenStream(&stream, &inputParameters, nullptr, SAMPLE_RATE, paFramesPerBufferUnspecified, paClipOff, &PortAudioSource::paCallback, this);
+        err = Pa_OpenStream(&stream, &inputParameters, nullptr, SAMPLE_RATE, FRAMES_PER_BUFFER, paClipOff, &PortAudioSource::paCallback, this);
         if (err != paNoError) {
             std::cerr << "Failed to open audio stream: " << Pa_GetErrorText(err) << std::endl;
             Pa_Terminate();
@@ -84,12 +84,13 @@ private:
                           void* userData) {
         PortAudioSource* _this = static_cast<PortAudioSource*>(userData);
         const int8_t* in = static_cast<const int8_t*>(inputBuffer);
-        int8_t* out = static_cast<int8_t*>(outputBuffer);
+        // int8_t* out = static_cast<int8_t*>(outputBuffer);
 
         if (in != nullptr) {
-            std::memcpy(_this->stream_buffer.writeBuf, inputBuffer, framesPerBuffer * sizeof(dsp::complex_t));
-            _this->stream_buffer.swap(framesPerBuffer);
+            volk_8i_s32f_convert_32f((float*)_this->stream_buffer.writeBuf, in, 128.0f, framesPerBuffer);
+            if (!_this->stream_buffer.swap(framesPerBuffer)) { return -1; }
         }
+
         return paContinue;
     }
 
@@ -311,7 +312,6 @@ private:
 
     static void start(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
-        _this->startRecording();
 
         if (_this->running) { return; }
 
@@ -365,7 +365,6 @@ private:
 
     static void stop(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
-        _this->stopRecording();
 
         if (!_this->running) { return; }        
         _this->stream.stopWriter();
@@ -529,86 +528,7 @@ private:
             config.conf["devices"][_this->selectedSerial]["amp"] = _this->amp;
             config.release(true);
         }
-    }    
-
-    std::vector<float> generate_lowpass_fir_coefficients(float cutoff_freq, int sample_rate, int num_taps) {
-        std::vector<float> coefficients(num_taps);
-        float norm_cutoff = cutoff_freq / (sample_rate / 2.0); // Normalize cutoff frequency
-        int M = num_taps - 1;
-        for (int i = 0; i < num_taps; ++i) {
-            if (i == M / 2) {
-                coefficients[i] = norm_cutoff;
-            } else {
-                coefficients[i] = norm_cutoff * (std::sin(M_PI * norm_cutoff * (i - M / 2)) / (M_PI * norm_cutoff * (i - M / 2)));
-            }
-            coefficients[i] *= 0.54 - 0.46 * std::cos(2 * M_PI * i / M); // Hamming window
-        }
-        return coefficients;
-    }
-
-    std::vector<float> apply_fir_filter(const std::vector<float>& input, const std::vector<float>& coefficients) {
-        int input_size = input.size();
-        int num_taps = coefficients.size();
-        std::vector<float> output(input_size, 0.0f);
-
-        for (int i = num_taps / 2; i < input_size - num_taps / 2; ++i) {
-            for (int j = 0; j < num_taps; ++j) {
-                output[i] += input[i - num_taps / 2 + j] * coefficients[j];
-            }
-        }
-
-        return output;
-    }
-
-    std::vector<float> rational_resampler(const std::vector<float>& input, int interpolation, int decimation) {
-        // Calculate output size
-        size_t output_size = input.size() * interpolation / decimation;
-        std::vector<float> output(output_size);
-
-        // Resampling loop
-        for (size_t i = 0; i < output_size; ++i) {
-            float input_index = i * decimation / interpolation;
-            int lower_index = static_cast<int>(std::floor(input_index));
-            int upper_index = static_cast<int>(std::ceil(input_index));
-
-            // Check boundary conditions
-            if (lower_index < 0 || upper_index >= static_cast<int>(input.size())) {
-                output[i] = 0.0f; // Zero-padding for out-of-bounds access
-            } else {
-                // Linear interpolation
-                float t = input_index - lower_index;
-                output[i] = (1 - t) * input[lower_index] + t * input[upper_index];
-            }
-        }
-
-        return output;
-    }
-
-    std::vector<float> multiply_const(const std::vector<float>& input, float constant) {
-        std::vector<float> output;
-        output.reserve(input.size());
-
-        for (auto sample : input) {
-            output.push_back(sample * constant);
-        }
-
-        return output;
-    }
-
-    std::vector<float> frequency_modulator(const std::vector<float>& input, float sensitivity, float sample_rate, float carrier_freq) {
-        std::vector<float> output;
-        output.reserve(input.size());
-
-        float phase = 0.0f;
-        float phase_increment = TWO_PI * carrier_freq / sample_rate;
-
-        for (auto sample : input) {
-            phase += phase_increment + sensitivity * sample;
-            output.push_back(std::sin(phase));
-        }
-
-        return output;
-    }
+    }       
 
     static int callback_rx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->rx_ctx;
@@ -621,75 +541,43 @@ private:
 
         double modulationIndex = 5.0;
         double amplitudeScalingFactor = 1.5;
-        double cutoffFreq = _KHZ(300);
+        double cutoffFreq = _KHZ(75);
         double hackrf_sample_rate = sampleRate;
-        double newSampleRate = sampleRate / 50.0;
+        double newSampleRate = sampleRate / 48.0;
         double resampleRatio = sampleRate / newSampleRate;
-        double frequency = 1000.0;
 
-        std::vector<uint8_t> mic_buffer;
-        std::vector<float> float_buffer;
+        int size = BUF_LEN;
 
-        int size = BUF_LEN / 2;
-        int readSize = stream.readSpecificSize(size);
-        if (readSize > 0) {
-            const dsp::complex_t* readBuffer = stream.readBuf;
-            mic_buffer.resize(readSize * sizeof(dsp::complex_t));
-            std::memcpy(mic_buffer.data(), readBuffer, readSize * sizeof(dsp::complex_t));
-            stream.flush();  // Flush after reading
-        }
-        std::cout << "mic_buffer " << mic_buffer.size() << std::endl;
-
-//        float_buffer.reserve(mic_buffer.size() / sizeof(float));
-//        for (size_t i = 0; i < mic_buffer.size(); i += sizeof(float)) {
-//            // float_buffer.push_back(std::sin(TWO_PI * frequency * i / hackrf_sample_rate));
-//        }
-
-        float_buffer.reserve(mic_buffer.size() / sizeof(float)); // Reserve space for the float_buffer
-        for (size_t i = 0; i < mic_buffer.size(); i += sizeof(float)) {
-            float value;
-            std::memcpy(&value, mic_buffer.data() + i, sizeof(float));
-            value = (value - 128.0f) / 128.0f;
-            float_buffer.push_back(value);
+        std::vector<float> float_buffer = stream.readBufferToVector();
+        while (float_buffer.size() < size) {
+            std::vector<float> additional_data = stream.readBufferToVector();
+            float_buffer.insert(float_buffer.end(), additional_data.begin(), additional_data.end());
         }
 
-        // Apply low-pass filter before modulation
-        int num_taps = 101; // Number of taps for FIR filter
-        std::vector<float> filter_coefficients = generate_lowpass_fir_coefficients(cutoffFreq, hackrf_sample_rate, num_taps);
-        std::vector<float> filtered_buffer = apply_fir_filter(float_buffer, filter_coefficients);
-
-        // // Apply frequency modulation
-        // float sensitivity = modulationIndex;
-        // std::vector<float> modulated_audio = frequency_modulator(float_buffer, sensitivity, hackrf_sample_rate, 0);
-
-        // // Apply amplitude scaling
-        // std::vector<float> multiplied_audio = multiply_const(modulated_audio, amplitudeScalingFactor);
-
-        // // Resample audio
-        // int interpolation = 2;//static_cast<int>(std::ceil(resampleRatio));
-        // int decimation = 1;
-        // std::vector<float> resampled_audio = rational_resampler(multiplied_audio, interpolation, decimation);
-
-        // // Apply low-pass filter before modulation
         // int num_taps = 101; // Number of taps for FIR filter
         // std::vector<float> filter_coefficients = generate_lowpass_fir_coefficients(cutoffFreq, hackrf_sample_rate, num_taps);
-        // std::vector<float> filtered_buffer = apply_fir_filter(resampled_audio, filter_coefficients);
+        // std::vector<float> filtered_buffer = apply_fir_filter(float_buffer, filter_coefficients);
 
-        // for (size_t i = 0; i < length && i < filtered_buffer.size(); ++i) {
-        //     buffer[i] = static_cast<int8_t>(std::max(std::min(filtered_buffer[i] * 127.0f, 127.0f), -127.0f));
-        // }
+        // Apply frequency modulation
+        float sensitivity = modulationIndex;
+        std::vector<float> modulated_audio = frequency_modulator(float_buffer, sensitivity, hackrf_sample_rate, 0);
 
-        for (uint32_t sampleIndex = 0; sampleIndex < length / 2; ++sampleIndex) {
-            double time = static_cast<double>(sampleIndex) / hackrf_sample_rate;
-            // double audioSignal = std::sin(TWO_PI * frequency * time);
-            auto audioSignal = filtered_buffer[sampleIndex];
-            double modulatedPhase = TWO_PI * time + modulationIndex * audioSignal;
-            double inPhaseComponent = cos(modulatedPhase) * amplitudeScalingFactor;
-            double quadratureComponent = sin(modulatedPhase) * amplitudeScalingFactor;
-            buffer[sampleIndex * 2] = static_cast<int8_t>(std::clamp(inPhaseComponent * 127, -127.0, 127.0));
-            buffer[sampleIndex * 2 + 1] = static_cast<int8_t>(std::clamp(quadratureComponent * 127, -127.0, 127.0));
+        // Apply amplitude scaling
+        std::vector<float> multiplied_audio = multiply_const(modulated_audio, amplitudeScalingFactor);
+
+        // Resample audio
+        int interpolation = static_cast<int>(std::ceil(resampleRatio));
+        int decimation = 1;
+        std::vector<float> resampled_audio = rational_resampler(multiplied_audio, interpolation, decimation);
+
+        for (size_t i = 0; i < length / 2 && i * 2 + 1 < resampled_audio.size(); ++i) {
+            buffer[i * 2] = static_cast<int8_t>(std::max(std::min(resampled_audio[i * 2] * 127.0f, 127.0f), -127.0f));
+            buffer[i * 2 + 1] = static_cast<int8_t>(std::max(std::min(resampled_audio[i * 2 + 1] * 127.0f, 127.0f), -127.0f));
         }
 
+        // for (size_t i = 0; i < length && i < resampled_audio.size(); ++i) {
+        //     buffer[i] = static_cast<int8_t>(std::max(std::min(resampled_audio[i] * 127.0f, 127.0f), -127.0f));
+        // }
     }
 
     int send_mic_tx(int8_t* buffer, uint32_t length) {

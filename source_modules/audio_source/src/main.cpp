@@ -39,7 +39,7 @@ public:
         audio.setErrorCallback(&errorCallback);
 #endif
 
-        sampleRate = 48000.0;
+        sampleRate = 44100.0;
 
         handler.ctx = this;
         handler.selectHandler = menuSelected;
@@ -101,7 +101,7 @@ public:
                 if (!info.probed) { continue; }
 #endif
                 // Check that it has a stereo input
-                if (info.inputChannels > 1) { continue; }
+                if (info.inputChannels < 2) { continue; }
 
                 // Save info
                 DeviceInfo dinfo = { info, i };
@@ -189,7 +189,7 @@ private:
         // Stream options
         RtAudio::StreamParameters parameters;
         parameters.deviceId = _this->devices[_this->devId].id;
-        parameters.nChannels = 1;
+        parameters.nChannels = 2;
         unsigned int bufferFrames = _this->sampleRate / 200;
         RtAudio::StreamOptions opts;
         opts.flags = RTAUDIO_MINIMIZE_LATENCY;

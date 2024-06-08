@@ -99,5 +99,84 @@ const char* bandwidthsTxt = "1.75MHz\0"
                             "28MHz\0"
                             "Auto\0";
 
+std::vector<float> generate_lowpass_fir_coefficients(float cutoff_freq, int sample_rate, int num_taps) {
+    std::vector<float> coefficients(num_taps);
+    float norm_cutoff = cutoff_freq / (sample_rate / 2.0); // Normalize cutoff frequency
+    int M = num_taps - 1;
+    for (int i = 0; i < num_taps; ++i) {
+        if (i == M / 2) {
+            coefficients[i] = norm_cutoff;
+        } else {
+            coefficients[i] = norm_cutoff * (std::sin(M_PI * norm_cutoff * (i - M / 2)) / (M_PI * norm_cutoff * (i - M / 2)));
+        }
+        coefficients[i] *= 0.54 - 0.46 * std::cos(2 * M_PI * i / M); // Hamming window
+    }
+    return coefficients;
+}
+
+std::vector<float> apply_fir_filter(const std::vector<float>& input, const std::vector<float>& coefficients) {
+    int input_size = input.size();
+    int num_taps = coefficients.size();
+    std::vector<float> output(input_size, 0.0f);
+
+    for (int i = num_taps / 2; i < input_size - num_taps / 2; ++i) {
+        for (int j = 0; j < num_taps; ++j) {
+            output[i] += input[i - num_taps / 2 + j] * coefficients[j];
+        }
+    }
+
+    return output;
+}
+
+std::vector<float> rational_resampler(const std::vector<float>& input, int interpolation, int decimation) {
+    // Calculate output size
+    size_t output_size = input.size() * interpolation / decimation;
+    std::vector<float> output(output_size);
+
+    // Resampling loop
+    for (size_t i = 0; i < output_size; ++i) {
+        float input_index = i * decimation / interpolation;
+        int lower_index = static_cast<int>(std::floor(input_index));
+        int upper_index = static_cast<int>(std::ceil(input_index));
+
+        // Check boundary conditions
+        if (lower_index < 0 || upper_index >= static_cast<int>(input.size())) {
+            output[i] = 0.0f; // Zero-padding for out-of-bounds access
+        } else {
+            // Linear interpolation
+            float t = input_index - lower_index;
+            output[i] = (1 - t) * input[lower_index] + t * input[upper_index];
+        }
+    }
+
+    return output;
+}
+
+std::vector<float> multiply_const(const std::vector<float>& input, float constant) {
+    std::vector<float> output;
+    output.reserve(input.size());
+
+    for (auto sample : input) {
+        output.push_back(sample * constant);
+    }
+
+    return output;
+}
+
+std::vector<float> frequency_modulator(const std::vector<float>& input, float sensitivity, float sample_rate, float carrier_freq) {
+    std::vector<float> output;
+    output.reserve(input.size());
+
+    float phase = 0.0f;
+    float phase_increment = 2 * M_PI * carrier_freq / sample_rate;
+
+    for (auto sample : input) {
+        phase += phase_increment + sensitivity * sample;
+        output.push_back(std::sin(phase));
+    }
+
+    return output;
+}
+
 #endif // HACKRFSOURCEMODULE_H
 

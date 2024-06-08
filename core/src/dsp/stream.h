@@ -20,7 +20,7 @@ namespace dsp {
         virtual void clearWriteStop() {}
         virtual void stopReader() {}
         virtual void clearReadStop() {}
-    };
+    };   
 
     template <class T>
     class stream : public untyped_stream {
@@ -64,9 +64,6 @@ namespace dsp {
                 dataReady = true;
             }
             rdyCV.notify_all();
-
-            std::cout << "Buffer swapped. Data size: " << size << std::endl;
-
             return true;
         }
 
@@ -76,15 +73,7 @@ namespace dsp {
             rdyCV.wait(lck, [this] { return (dataReady || readerStop); });
 
             return (readerStop ? -1 : dataSize);
-        }
-
-        virtual inline int readSpecificSize(int size) {
-            std::unique_lock<std::mutex> lck(rdyMtx);
-            rdyCV.wait(lck, [this, size] { return (dataReady && dataSize >= size) || readerStop; });
-
-            if (readerStop) return -1;
-            return size;
-        }
+        }       
 
         virtual inline void flush() {
             // Clear data ready
@@ -131,6 +120,15 @@ namespace dsp {
             if (readBuf) { buffer::free(readBuf); }
             writeBuf = NULL;
             readBuf = NULL;
+        }
+
+
+        std::vector<float> readBufferToVector() {
+            std::vector<float> float_buffer;
+            for (int i = 0; i < dataSize; ++i) {
+                float_buffer.push_back(readBuf[i].re);
+            }
+            return float_buffer;
         }
 
         T* writeBuf;
