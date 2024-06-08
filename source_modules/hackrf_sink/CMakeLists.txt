@@ -6,6 +6,11 @@ file(GLOB SRC "src/*.cpp")
 include(${SDRPP_MODULE_CMAKE})
 
 target_sources(hackrf_sink
+  PRIVATE
+    src/custombuffer.h src/custombuffer.cpp
+)
+
+target_sources(hackrf_sink
     PRIVATE
     src/constants.h
 )

@@ -1,4 +1,5 @@
 #include "constants.h"
+#include "custombuffer.h"
 
 class HackRFSinkModule : public ModuleManager::Instance {
 public:
@@ -38,10 +39,11 @@ public:
         double resampleRatio = sampleRate / newSampleRate;
         this->interpolation = resampleRatio;
 
-        this->rational_resampler_xxx_0 = gr::filter::rational_resampler_ccf::make(this->interpolation, decimation);
-        this->blocks_multiply_const_vxx_0 = gr::blocks::multiply_const_ff::make(4);
         this->audio_source_0 = gr::audio::source::make(this->audioSampleRate, "", true);
         this->analog_frequency_modulator_fc_0 = gr::analog::frequency_modulator_fc::make(2.5);
+        this->blocks_multiply_const_vxx_0 = gr::blocks::multiply_const_ff::make(4);
+        this->rational_resampler_xxx_0 = gr::filter::rational_resampler_ccf::make(this->interpolation, decimation);
+        this->customBuffer = std::make_shared<CustomBuffer>("custom_buffer", stream);
 
         sigpath::sourceManager.registerSource("HackRFSink", &handler);
         flog::info("{} Sample rate: {} Hz, Frequency: {} Hz BandWidth: {} Hz", this->name, this->sampleRate, this->freq, this->bandwidthIdToBw(this->bwId));
@@ -293,6 +295,7 @@ private:
         _this->tb->connect((const gr::block_sptr&)_this->blocks_multiply_const_vxx_0, 0, (const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0);
         _this->tb->connect((const gr::block_sptr&)_this->analog_frequency_modulator_fc_0, 0, (const gr::block_sptr&)_this->rational_resampler_xxx_0, 0);
         _this->tb->connect((const gr::block_sptr&)_this->rational_resampler_xxx_0, 0, (const gr::block_sptr&)_this->soapy_hackrf_sink_0, 0);
+        _this->tb->connect((const gr::block_sptr&)_this->rational_resampler_xxx_0, 0, (const gr::block_sptr&)_this->customBuffer, 0);
         _this->tb->unlock();
 
         try {
@@ -382,6 +385,7 @@ private:
     int tx_vga = 0;
 
     gr::top_block_sptr tb;
+    std::shared_ptr<CustomBuffer> customBuffer;
     gr::soapy::sink::sptr soapy_hackrf_sink_0;
     gr::filter::rational_resampler_ccf::sptr rational_resampler_xxx_0;
     gr::blocks::multiply_const_ff::sptr blocks_multiply_const_vxx_0;
