@@ -542,7 +542,6 @@ private:
 
         double modulationIndex = 5.0;
         double amplitudeScalingFactor = 1.5;
-        double audioSampleRate = 44100.0;
         double newSampleRate = sampleRate / 60.0;
         double interpolation = sampleRate / newSampleRate;
         int decimation = 1;
