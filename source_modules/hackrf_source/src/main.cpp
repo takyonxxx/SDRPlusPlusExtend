@@ -538,7 +538,7 @@ private:
         return 0;
     }
 
-    void apply_modulation(int8_t* buffer, uint32_t length) {
+    int apply_modulation(int8_t* buffer, uint32_t length) {
 
         double modulationIndex = 5.0;
         double amplitudeScalingFactor = 1.5;
@@ -570,16 +570,13 @@ private:
         for (size_t i = 0; i < resampled_signal.size() && i < length; ++i) {
             buffer[i] = static_cast<int8_t>(std::real(resampled_signal[i]) * amplitudeScalingFactor);
         }
-    }
 
-    int send_mic_tx(int8_t* buffer, uint32_t length) {
-        apply_modulation(buffer, length);
         return 0;
-    }
+    }    
 
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        return _this->send_mic_tx((int8_t *)transfer->buffer, transfer->valid_length);
+        return _this->apply_modulation((int8_t *)transfer->buffer, transfer->valid_length);
     }
 
     std::string name;
