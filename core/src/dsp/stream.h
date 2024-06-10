@@ -1,4 +1,5 @@
 #pragma once
+#include <vector>
 #include <iostream>
 #include <string.h>
 #include <mutex>
@@ -121,7 +122,6 @@ namespace dsp {
             writeBuf = NULL;
             readBuf = NULL;
         }
-
 
         std::vector<float> readBufferToVector() {
             std::vector<float> float_buffer;

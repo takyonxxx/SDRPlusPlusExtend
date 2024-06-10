@@ -9,6 +9,8 @@ target_sources(hackrf_source
   PRIVATE
     src/constants.h
     src/hackrfsourcemodule.h
+    src/FrequencyModulator.h
+    src/RationalSampler.h
 
 
 )

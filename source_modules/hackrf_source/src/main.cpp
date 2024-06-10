@@ -1,6 +1,8 @@
 #include "hackrfsourcemodule.h"
 #include "constants.h"
 #include <portaudio.h>
+#include "FrequencyModulator.h"
+#include "RationalSampler.h"
 
 class PortAudioSource {
 public:
@@ -553,31 +555,21 @@ private:
             float_buffer.insert(float_buffer.end(), additional_data.begin(), additional_data.end());
         }
 
-        // std::cout << "Mic Size : " << float_buffer.size() << std::endl;
-        // for (auto sample : float_buffer) {
-        //     std::cout << sample << std::endl;
-        // }
+        int noutput_items = float_buffer.size();
+        std::vector<std::complex<float>> modulated_signal(noutput_items);
 
-        float sensitivity = modulationIndex; //* (freq / audioSampleRate);
-        std::vector<float> modulated_audio = frequency_modulator(float_buffer, sensitivity);
+        // Apply frequency modulation
+        float sensitivity = 5.0f;
+        FrequencyModulator modulator(sensitivity);
+        modulator.work(noutput_items, float_buffer, modulated_signal);
 
-        float cutoff_freq = 1.0 * 44100; // Set cutoff frequency to Nyquist frequency
-        std::vector<float> filtered_audio = low_pass_filter(modulated_audio, cutoff_freq, 44100);
+        // Apply rational resampling
+        RationalSampler resampler(interpolation, decimation, 0.4f);
+        std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
 
-        // Apply amplitude scaling
-        std::vector<float> multiplied_audio = multiply_const(filtered_audio, amplitudeScalingFactor);
-
-        // Resample audio
-        std::vector<float> resampled_audio = rational_resampler(multiplied_audio, interpolation, decimation);
-
-        for (size_t i = 0; i < length / 2 && i * 2 + 1 < resampled_audio.size(); ++i) {
-            buffer[i * 2] = static_cast<int8_t>(std::max(std::min(resampled_audio[i * 2] * 127.0f, 127.0f), -127.0f));
-            buffer[i * 2 + 1] = static_cast<int8_t>(std::max(std::min(resampled_audio[i * 2 + 1] * 127.0f, 127.0f), -127.0f));
+        for (size_t i = 0; i < resampled_signal.size() && i < length; ++i) {
+            buffer[i] = static_cast<int8_t>(std::real(resampled_signal[i]) * amplitudeScalingFactor);
         }
-
-        // for (size_t i = 0; i < length && i < resampled_audio.size(); ++i) {
-        //     buffer[i] = static_cast<int8_t>(std::max(std::min(resampled_audio[i] * 127.0f, 127.0f), -127.0f));
-        // }
     }
 
     int send_mic_tx(int8_t* buffer, uint32_t length) {
