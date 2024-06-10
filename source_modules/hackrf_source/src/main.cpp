@@ -1,6 +1,7 @@
 #include "hackrfsourcemodule.h"
 #include "constants.h"
 #include <portaudio.h>
+#include <deque>
 #include "FrequencyModulator.h"
 #include "RationalSampler.h"
 
@@ -77,7 +78,7 @@ private:
     dsp::stream<dsp::complex_t>& stream_buffer;
 
     static const int SAMPLE_RATE = 44100;
-    static const int FRAMES_PER_BUFFER = 256;
+    static const int FRAMES_PER_BUFFER = 4096;
 
     static int paCallback(const void* inputBuffer, void* outputBuffer,
                           unsigned long framesPerBuffer,
@@ -244,6 +245,10 @@ public:
             config.conf["devices"][serial]["vgaGain"] = 40;
             config.conf["devices"][serial]["txVgaGain"] = 47;
             config.conf["devices"][serial]["bandwidth"] = 16;
+            config.conf["devices"][serial]["amplitude"] = 5.0;
+            config.conf["devices"][serial]["filter_size"] = 0.4;
+            config.conf["devices"][serial]["modulation_index"] = 5.0;
+            config.conf["devices"][serial]["interpolation"] = 48;
         }
         config.release(created);
 
@@ -256,6 +261,10 @@ public:
         lna = 0;
         vga = 0;
         tx_vga = 0;
+        amplitude = 5.0;
+        filter_size = 0.4;
+        modulation_index = 5.0;
+        interpolation = 48;
         bwId = 1;
 
         // Load from config if available and validate
@@ -285,6 +294,18 @@ public:
         }
         if (config.conf["devices"][serial].contains("txVgaGain")) {
             tx_vga = config.conf["devices"][serial]["txVgaGain"];
+        }
+        if (config.conf["devices"][serial].contains("amplitude")) {
+            amplitude = config.conf["devices"][serial]["amplitude"];
+        }
+        if (config.conf["devices"][serial].contains("filter_size")) {
+            filter_size = config.conf["devices"][serial]["filter_size"];
+        }
+        if (config.conf["devices"][serial].contains("modulation_index")) {
+            modulation_index = config.conf["devices"][serial]["modulation_index"];
+        }
+        if (config.conf["devices"][serial].contains("interpolation")) {
+            interpolation = config.conf["devices"][serial]["interpolation"];
         }
         if (config.conf["devices"][serial].contains("bandwidth")) {
             bwId = config.conf["devices"][serial]["bandwidth"];
@@ -488,30 +509,6 @@ private:
             config.release(true);
         }
 
-        SmGui::LeftLabel("Tx VGA Gain");
-        SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_vga_", _this->name), &_this->tx_vga, 0, 47, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
-            if (_this->running) {
-                hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
-            }
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["txVgaGain"] = (int)_this->tx_vga;
-            config.release(true);
-        }
-
-        if (SmGui::Checkbox(CONCAT("Ptt Enabled - Tx Mode##_hackrf_ptt_", _this->name), &_this->ptt)) {
-
-            if (_this->running) {
-                _this->stop(ctx);
-            }
-
-            _this->start(ctx);
-
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["ptt"] = _this->ptt;
-            config.release(true);
-        }
-
         if (SmGui::Checkbox(CONCAT("Bias-T##_hackrf_bt_", _this->name), &_this->biasT)) {
             if (_this->running) {
                 hackrf_set_antenna_enable(_this->openDev, _this->biasT);
@@ -529,6 +526,65 @@ private:
             config.conf["devices"][_this->selectedSerial]["amp"] = _this->amp;
             config.release(true);
         }
+
+        if (SmGui::Checkbox(CONCAT("Ptt Enabled - Tx Mode##_hackrf_ptt_", _this->name), &_this->ptt)) {
+
+            if (_this->running) {
+                _this->stop(ctx);
+            }
+
+
+            _this->stream.flush();
+
+            _this->start(ctx);
+
+            config.acquire();
+            config.conf["devices"][_this->selectedSerial]["ptt"] = _this->ptt;
+            config.release(true);
+        }
+
+        SmGui::LeftLabel("Tx VGA Gain");
+        SmGui::FillWidth();
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_vga_", _this->name), &_this->tx_vga, 0, 47, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
+            if (_this->running) {
+                hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
+            }
+            config.acquire();
+            config.conf["devices"][_this->selectedSerial]["txVgaGain"] = (int)_this->tx_vga;
+            config.release(true);
+        }
+
+        SmGui::LeftLabel("Mic Gain");
+        SmGui::FillWidth();
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_mic_gain_", _this->name), &_this->amplitude, 0.1, 10.0, 0.1, SmGui::FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
+            config.acquire();
+            config.conf["devices"][_this->selectedSerial]["amplitude"] = (float)_this->amplitude;
+            config.release(true);
+        }
+
+        SmGui::LeftLabel("Sensitivity");
+        SmGui::FillWidth();
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_sensitivity_", _this->name), &_this->modulation_index, 0.1, 10.0, 0.1, SmGui:: FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
+            config.acquire();
+            config.conf["devices"][_this->selectedSerial]["modulation_index"] = (float)_this->modulation_index;
+            config.release(true);
+        }
+
+        SmGui::LeftLabel("Filter Size");
+        SmGui::FillWidth();
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_filter_size_", _this->name), &_this->filter_size, 0.0, 2.0, 0.2, SmGui:: FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
+            config.acquire();
+            config.conf["devices"][_this->selectedSerial]["filter_size"] = (float)_this->filter_size;
+            config.release(true);
+        }
+
+        SmGui::LeftLabel("Interpolation");
+        SmGui::FillWidth();
+        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_interpolation_", _this->name), &_this->interpolation, 0, 200, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
+            config.acquire();
+            config.conf["devices"][_this->selectedSerial]["interpolation"] = (float)_this->interpolation;
+            config.release(true);
+        }      
     }       
 
     static int callback_rx(hackrf_transfer* transfer) {
@@ -536,17 +592,13 @@ private:
         volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
         if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
         return 0;
-    }
+    }  
 
     int apply_modulation(int8_t* buffer, uint32_t length) {
 
-        double modulationIndex = 5.0;
-        double amplitudeScalingFactor = 1.5;
-        double newSampleRate = sampleRate / 60.0;
-        double interpolation = sampleRate / newSampleRate;
         int decimation = 1;
 
-        int size = BUF_LEN / 2;
+        int size = length / 2;
 
         std::vector<float> float_buffer = stream.readBufferToVector();
         while (float_buffer.size() < size) {
@@ -555,19 +607,27 @@ private:
         }
 
         int noutput_items = float_buffer.size();
+
+        for (int i = 0; i < noutput_items; ++i) {
+            float_buffer[i] *= this->amplitude;
+        }
+
         std::vector<std::complex<float>> modulated_signal(noutput_items);
 
-        // Apply frequency modulation
-        float sensitivity = 5.0f;
+        float sensitivity = modulation_index;
         FrequencyModulator modulator(sensitivity);
         modulator.work(noutput_items, float_buffer, modulated_signal);
 
-        // Apply rational resampling
-        RationalSampler resampler(interpolation, decimation, 0.4f);
+        RationalSampler resampler(interpolation, decimation, filter_size);
         std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
 
-        for (size_t i = 0; i < resampled_signal.size() && i < length; ++i) {
-            buffer[i] = static_cast<int8_t>(std::real(resampled_signal[i]) * amplitudeScalingFactor);
+        for (int i = 0; i < noutput_items; ++i) {            
+            float real_part = std::real(resampled_signal[i]);
+            float imag_part = std::imag(resampled_signal[i]);
+            int8_t real_scaled = static_cast<int8_t>(real_part * 127.0f);
+            int8_t imag_scaled = static_cast<int8_t>(imag_part * 127.0f);
+            buffer[2 * i] = real_scaled;
+            buffer[2 * i + 1] = imag_scaled;
         }
 
         return 0;
@@ -596,6 +656,10 @@ private:
     float lna = 0;
     float vga = 0;
     float tx_vga = 0;
+    float amplitude = 1.0;
+    float filter_size = 0;
+    float modulation_index = 0;
+    float interpolation = 0;
     int current_tx_sample = 0;
 
     PortAudioSource *portAudioSource;

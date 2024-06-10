@@ -4,103 +4,85 @@
 #include <vector>
 #include <cmath>
 #include <complex>
-#include <algorithm>
-#include <numeric>
 #include <stdexcept>
 
 class RationalSampler {
 public:
-    RationalSampler(unsigned interpolation, unsigned decimation, float fractional_bw)
-        : interpolation(interpolation), decimation(decimation), fractional_bw(fractional_bw) {
-        if (fractional_bw >= 0.5 || fractional_bw <= 0) {
-            throw std::range_error("Invalid fractional_bandwidth, must be in (0, 0.5)");
-        }
+    RationalSampler(unsigned interpolation, unsigned decimation, float filter_size)
+        : interpolation(interpolation), decimation(decimation), filter_size(filter_size) {
         if (interpolation == 0 || decimation == 0) {
-            throw std::out_of_range("Interpolation and decimation factors must be > 0");
-        }
-
-        // Reduce interpolation and decimation by their greatest common divisor
-        auto gcd = std::gcd(interpolation, decimation);
-        this->interpolation /= gcd;
-        this->decimation /= gcd;
-
-        // Design filter taps
-        taps = design_resampler_filter(this->interpolation, this->decimation, this->fractional_bw);
-
-        // Create polyphase filters
-        int num_taps = taps.size();
-        int filter_len = num_taps / this->interpolation;
-        polyphase_filters.resize(this->interpolation);
-        for (int i = 0; i < this->interpolation; i++) {
-            polyphase_filters[i].resize(filter_len);
-            for (int j = 0; j < filter_len; j++) {
-                polyphase_filters[i][j] = taps[i + j * this->interpolation];
-            }
+            throw std::out_of_range("Interpolation and decimation factors must be greater than zero");
         }
     }
 
     std::vector<std::complex<float>> resample(const std::vector<std::complex<float>>& input) {
-        std::vector<std::complex<float>> output((input.size() * interpolation) / decimation + 1);
-        unsigned ctr = 0;
-        int out_idx = 0;
 
-        for (size_t in_idx = 0; in_idx < input.size(); ++in_idx) {
-            for (int j = 0; j < interpolation; ++j) {
-                std::complex<float> sum = 0;
-                for (int k = 0; k < polyphase_filters[j].size(); ++k) {
-                    if (in_idx >= k) {
-                        sum += input[in_idx - k] * polyphase_filters[j][k];
-                    }
-                }
-                if (ctr == 0) {
-                    output[out_idx++] = sum;
-                }
-                ctr = (ctr + decimation) % interpolation;
+        std::vector<std::complex<float>> filtered_input = apply_low_pass_filter(input);
+
+        std::vector<std::complex<float>> interpolated_output;
+        interpolated_output.reserve(input.size() * interpolation);
+
+        for (size_t i = 0; i < filtered_input.size() - 1; ++i) {
+            interpolated_output.push_back(filtered_input[i]);
+            for (unsigned j = 1; j < interpolation; ++j) {
+                std::complex<float> interpolated_sample;
+                float t = static_cast<float>(j) / static_cast<float>(interpolation);
+                interpolated_sample.real((1.0f - t) * filtered_input[i].real() + t * filtered_input[i + 1].real());
+                interpolated_sample.imag((1.0f - t) * filtered_input[i].imag() + t * filtered_input[i + 1].imag());
+                interpolated_output.push_back(interpolated_sample);
             }
         }
+        interpolated_output.push_back(filtered_input.back());
 
-        output.resize(out_idx);
+        std::vector<std::complex<float>> output;
+        output.reserve(interpolated_output.size() / decimation);
+
+        for (size_t i = 0; i < interpolated_output.size(); i += decimation) {
+            output.push_back(interpolated_output[i]);
+        }
+
         return output;
     }
 
 private:
-    std::vector<float> design_resampler_filter(unsigned interpolation, unsigned decimation, float fractional_bw) {
-        float beta = 7.0;
-        float halfband = 0.5;
-        float rate = float(interpolation) / float(decimation);
-        float trans_width, mid_transition_band;
+    unsigned interpolation;
+    unsigned decimation;
+    float filter_size;
 
-        if (rate >= 1.0) {
-            trans_width = halfband - fractional_bw;
-            mid_transition_band = halfband - trans_width / 2.0;
-        } else {
-            trans_width = rate * (halfband - fractional_bw);
-            mid_transition_band = rate * halfband - trans_width / 2.0;
-        }
-
-        int num_taps = static_cast<int>(4 / trans_width);
-        std::vector<float> taps(num_taps);
+    std::vector<std::complex<float>> apply_low_pass_filter(const std::vector<std::complex<float>>& input) {
+        std::vector<float> filter;
+        int num_taps = static_cast<int>(7 * filter_size);
         float sum = 0.0f;
-        for (int i = 0; i < num_taps; i++) {
-            float x = 2 * M_PI * (i - (num_taps - 1) / 2.0f);
-            float sinc = (i == (num_taps - 1) / 2) ? 1.0f : sin(mid_transition_band * x) / (mid_transition_band * x);
-            float window = 0.54 - 0.46 * cos(2 * M_PI * i / (num_taps - 1));
-            taps[i] = sinc * window;
-            sum += taps[i];
+
+        for (int i = 0; i < num_taps; ++i) {
+            float tap_value = std::exp(-0.5f * std::pow(i - (num_taps - 1) / 2.0f, 2) / (2 * std::pow(filter_size, 2)));
+            filter.push_back(tap_value);
+            sum += tap_value;
         }
 
-        for (float& tap : taps) {
+        // Filtre normalizasyonu
+        for (auto& tap : filter) {
             tap /= sum;
         }
 
-        return taps;
-    }
+        std::vector<std::complex<float>> filtered_input;
 
-    unsigned interpolation;
-    unsigned decimation;
-    float fractional_bw;
-    std::vector<float> taps;
-    std::vector<std::vector<float>> polyphase_filters;
+        // Filtreyi uygulama
+        for (size_t i = 0; i < input.size(); ++i) {
+            std::complex<float> sum = 0;
+            for (size_t j = 0; j < filter.size(); ++j) {
+                if (i >= j) {
+                    sum += input[i - j] * filter[j];
+                }
+            }
+            filtered_input.push_back(sum);
+        }
+
+        if(filter_size != 0)
+            return filtered_input;
+        else
+            return input;
+    }
 };
 
 #endif // RATIONALSAMPLER_H
