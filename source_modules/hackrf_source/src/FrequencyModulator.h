@@ -24,7 +24,7 @@ void sincos(int32_t angle, float* sin_out, float* cos_out) {
 class FrequencyModulator {
 public:
     FrequencyModulator(float sensitivity)
-        : d_sensitivity(sensitivity), d_phase(0.0f), alpha(0.9f), prev(0.0f) {}
+        : d_sensitivity(sensitivity), d_phase(0.0f), alpha(0.75f), prev(0.0f) {}
 
     int work(int noutput_items, const std::vector<float>& input_items, std::vector<std::complex<float>>& output_items) {
         for (int i = 0; i < noutput_items; ++i) {

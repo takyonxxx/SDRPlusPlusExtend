@@ -246,7 +246,7 @@ public:
             config.conf["devices"][serial]["txVgaGain"] = 47;
             config.conf["devices"][serial]["bandwidth"] = 16;
             config.conf["devices"][serial]["amplitude"] = 5.0;
-            config.conf["devices"][serial]["filter_size"] = 0.4;
+            config.conf["devices"][serial]["filter_size"] = 0.0;
             config.conf["devices"][serial]["modulation_index"] = 5.0;
             config.conf["devices"][serial]["interpolation"] = 48;
         }
@@ -262,7 +262,7 @@ public:
         vga = 0;
         tx_vga = 0;
         amplitude = 5.0;
-        filter_size = 0.4;
+        filter_size = 0.0;
         modulation_index = 5.0;
         interpolation = 48;
         bwId = 1;
