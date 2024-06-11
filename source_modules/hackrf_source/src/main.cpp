@@ -22,7 +22,8 @@ public:
         handler.tuneHandler = tune;
         handler.stream = &stream;
 
-        rtAudioSource = new RtAudiSource(stream);
+//        rtAudioSource = new RtAudiSource(stream);
+        portAudioSource = new PortAudioSource(stream);
 
         refresh();
 
@@ -41,6 +42,12 @@ public:
             delete rtAudioSource;
         }
 
+        if(portAudioSource)
+        {
+            portAudioSource->stop();
+            delete portAudioSource;
+        }
+
         stop(this);
         hackrf_exit();
         sigpath::sourceManager.unregisterSource("HackRF");
@@ -48,14 +55,32 @@ public:
 
     void startRecording() {
 
-        if (!rtAudioSource->start()) {
-            std::cerr << "Error start AudioSource!" << std::endl;
+        if(rtAudioSource)
+        {
+            if (!rtAudioSource->start()) {
+                std::cerr << "Error start AudioSource!" << std::endl;
+            }
+        }
+        if(portAudioSource)
+        {
+            if (!portAudioSource->start()) {
+                std::cerr << "Error start AudioSource!" << std::endl;
+            }
         }
     }
 
-    void stopRecording() {
-        if (!rtAudioSource->stop()) {
-            std::cerr << "Error stop AudioSource!" << std::endl;
+    void stopRecording() {       
+        if(rtAudioSource)
+        {
+            if (!rtAudioSource->stop()) {
+                std::cerr << "Error stop AudioSource!" << std::endl;
+            }
+        }
+        if(portAudioSource)
+        {
+            if (!portAudioSource->stop()) {
+                std::cerr << "Error stop AudioSource!" << std::endl;
+            }
         }
     }
 
@@ -522,8 +547,12 @@ private:
         FrequencyModulator modulator(sensitivity);
         modulator.work(noutput_items, float_buffer, modulated_signal);
 
-        RationalResampler resampler(interpolation, decimation, filter_size);
-        std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
+//        RationalResampler resampler(interpolation, decimation, filter_size);
+//        std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
+
+        float fractional_bw = 0.4;
+
+        auto resampled_signal = design_and_resample(modulated_signal, interpolation, decimation, fractional_bw);
 
         for (int i = 0; i < noutput_items; ++i) {            
             float real_part = std::real(resampled_signal[i]);

@@ -112,9 +112,6 @@ private:
         RtAudiSource* _this = static_cast<RtAudiSource*>(userData);
         memcpy(_this->stream_buffer.writeBuf, inputBuffer, nBufferFrames * sizeof(dsp::complex_t));
         _this->stream_buffer.swap(nBufferFrames);
-
-        std::cout << nBufferFrames << std::endl;
-
         return 0;
     }
 
@@ -219,7 +216,7 @@ private:
         // volk_8i_s32f_convert_32f((float*)_this->stream_buffer.writeBuf, in, 128.0f, framesPerBuffer);
         // if (!_this->stream_buffer.swap(framesPerBuffer)) { return -1; }
 
-        memcpy(_this->stream_buffer.writeBuf, inputBuffer, framesPerBuffer * sizeof(float));
+        memcpy(_this->stream_buffer.writeBuf, inputBuffer, framesPerBuffer * sizeof(dsp::complex_t));
         _this->stream_buffer.swap(framesPerBuffer);
 
         return paContinue;
