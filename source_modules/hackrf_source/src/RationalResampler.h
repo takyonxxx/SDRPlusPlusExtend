@@ -1,14 +1,17 @@
-#ifndef RATIONALSAMPLER_H
-#define RATIONALSAMPLER_H
+#ifndef RATIONALRESAMPLER_H
+#define RATIONALRESAMPLER_H
 #include <iostream>
 #include <vector>
 #include <cmath>
 #include <complex>
 #include <stdexcept>
+#include <algorithm>
+#include <stdexcept>
 
-class RationalSampler {
+
+class RationalResampler {
 public:
-    RationalSampler(unsigned interpolation, unsigned decimation, float filter_size)
+    RationalResampler(unsigned interpolation, unsigned decimation, float filter_size)
         : interpolation(interpolation), decimation(decimation), filter_size(filter_size) {
         if (interpolation == 0 || decimation == 0) {
             throw std::out_of_range("Interpolation and decimation factors must be greater than zero");
@@ -85,4 +88,4 @@ private:
     }
 };
 
-#endif // RATIONALSAMPLER_H
+#endif // RATIONALRESAMPLER_H

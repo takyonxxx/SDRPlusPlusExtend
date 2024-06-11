@@ -1,102 +1,7 @@
 #include "hackrfsourcemodule.h"
-#include "constants.h"
-#include <portaudio.h>
-#include <deque>
 #include "FrequencyModulator.h"
-#include "RationalSampler.h"
-
-class PortAudioSource {
-public:
-    PortAudioSource(dsp::stream<dsp::complex_t>& stream_buffer) : stream_buffer(stream_buffer), stream(nullptr), isRecording(false)
-    {
-        err = Pa_Initialize();
-        if (err != paNoError) {
-            std::cerr << "PortAudioSource initialization failed: " << Pa_GetErrorText(err) << std::endl;
-            return;
-        }
-
-        PaStreamParameters inputParameters;
-        inputParameters.device = Pa_GetDefaultInputDevice();
-        if (inputParameters.device == paNoDevice) {
-            std::cerr << "Error: No default input device found!" << std::endl;
-            Pa_Terminate();
-            return;
-        }
-
-        const PaDeviceInfo* deviceInfo = Pa_GetDeviceInfo(inputParameters.device);
-        std::cout << "Using input device: " << deviceInfo->name << std::endl;
-
-        inputParameters.channelCount = 2;
-        inputParameters.sampleFormat = paFloat32;
-        inputParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
-        inputParameters.hostApiSpecificStreamInfo = nullptr;
-
-        err = Pa_OpenStream(&stream, &inputParameters, nullptr, SAMPLE_RATE, FRAMES_PER_BUFFER, paClipOff, &PortAudioSource::paCallback, this);
-        if (err != paNoError) {
-            std::cerr << "Failed to open audio stream: " << Pa_GetErrorText(err) << std::endl;
-            Pa_Terminate();
-            return;
-        }
-    }
-
-    ~PortAudioSource()
-    {
-        if (stream) {
-            Pa_CloseStream(stream);
-            Pa_Terminate();
-        }
-        stream = nullptr;
-    }
-
-    bool start()
-    {
-        err = Pa_StartStream(stream);
-        if (err != paNoError) {
-            std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
-            Pa_Terminate();
-            return false;
-        }
-        isRecording = true;
-        std::cerr << "PortAudioSource started." << std::endl;
-        return true;
-    }
-
-    bool stop()
-    {
-        if (stream) {
-            Pa_StopStream(stream);
-        }
-        std::cout << "PortAudioSource stopped." << std::endl;
-        isRecording = false;
-        return true;
-    }
-
-private:
-    PaStream* stream;
-    PaError err;
-    bool isRecording;
-    dsp::stream<dsp::complex_t>& stream_buffer;
-
-    static const int SAMPLE_RATE = 44100;
-    static const int FRAMES_PER_BUFFER = 4096;
-
-    static int paCallback(const void* inputBuffer, void* outputBuffer,
-                          unsigned long framesPerBuffer,
-                          const PaStreamCallbackTimeInfo* timeInfo,
-                          PaStreamCallbackFlags statusFlags,
-                          void* userData) {
-        PortAudioSource* _this = static_cast<PortAudioSource*>(userData);       
-
-        // volk_8i_s32f_convert_32f((float*)_this->stream_buffer.writeBuf, in, 128.0f, framesPerBuffer);
-        // if (!_this->stream_buffer.swap(framesPerBuffer)) { return -1; }
-
-        memcpy(_this->stream_buffer.writeBuf, inputBuffer, framesPerBuffer * sizeof(float));
-        _this->stream_buffer.swap(framesPerBuffer);
-
-        return paContinue;
-    }
-
-};
+#include "RationalResampler.h"
+#include "audiosource.h"
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:
@@ -117,7 +22,7 @@ public:
         handler.tuneHandler = tune;
         handler.stream = &stream;
 
-        portAudioSource = new PortAudioSource(stream);
+        rtAudioSource = new RtAudiSource(stream);
 
         refresh();
 
@@ -130,10 +35,10 @@ public:
 
     ~HackRFSourceModule() {
 
-        if(portAudioSource)
+        if(rtAudioSource)
         {
-            portAudioSource->stop();
-            delete portAudioSource;
+            rtAudioSource->stop();
+            delete rtAudioSource;
         }
 
         stop(this);
@@ -143,14 +48,14 @@ public:
 
     void startRecording() {
 
-        if (!portAudioSource->start()) {
-            std::cerr << "Error start portAudioSource!" << std::endl;
+        if (!rtAudioSource->start()) {
+            std::cerr << "Error start AudioSource!" << std::endl;
         }
     }
 
     void stopRecording() {
-        if (!portAudioSource->stop()) {
-            std::cerr << "Error stop portAudioSource!" << std::endl;
+        if (!rtAudioSource->stop()) {
+            std::cerr << "Error stop AudioSource!" << std::endl;
         }
     }
 
@@ -333,7 +238,7 @@ private:
     }
 
     static void start(void* ctx) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
+        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;        
 
         if (_this->running) { return; }
 
@@ -386,7 +291,7 @@ private:
     }
 
     static void stop(void* ctx) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
+        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;        
 
         if (!_this->running) { return; }        
         _this->stream.stopWriter();
@@ -617,7 +522,7 @@ private:
         FrequencyModulator modulator(sensitivity);
         modulator.work(noutput_items, float_buffer, modulated_signal);
 
-        RationalSampler resampler(interpolation, decimation, filter_size);
+        RationalResampler resampler(interpolation, decimation, filter_size);
         std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
 
         for (int i = 0; i < noutput_items; ++i) {            
@@ -662,6 +567,7 @@ private:
     int current_tx_sample = 0;
 
     PortAudioSource *portAudioSource;
+    RtAudiSource *rtAudioSource;
 
 #ifdef __ANDROID__
     int devFd = -1;

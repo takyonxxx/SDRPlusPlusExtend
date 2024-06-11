@@ -10,9 +10,8 @@ target_sources(hackrf_source
     src/constants.h
     src/hackrfsourcemodule.h
     src/FrequencyModulator.h
-    src/RationalSampler.h
-
-
+    src/RationalResampler.h
+    src/audiosource.h
 )
 
 if (MSVC)
@@ -22,6 +21,14 @@ if (MSVC)
 
     find_package(portaudio CONFIG REQUIRED)
     target_link_libraries(hackrf_source PRIVATE portaudio)
+
+    # Lib path
+    target_link_directories(hackrf_source PRIVATE "C:/Program Files (x86)/RtAudio/lib")
+
+    # Misc headers
+    target_include_directories(hackrf_source PRIVATE "C:/Program Files (x86)/RtAudio/include/rtaudio")
+
+    target_link_libraries(hackrf_source PRIVATE rtaudio)
 
 elseif (ANDROID)
     target_include_directories(hackrf_source PUBLIC
@@ -44,4 +51,10 @@ else (MSVC)
     target_include_directories(hackrf_source PRIVATE ${PORTAUDIO_INCLUDE_DIRS})
     target_link_directories(hackrf_source PRIVATE ${PORTAUDIO_LIBRARY_DIRS})
     target_link_libraries(hackrf_source PRIVATE ${PORTAUDIO_LIBRARIES})
+
+    pkg_check_modules(RTAUDIO REQUIRED rtaudio)
+
+    target_include_directories(hackrf_source PRIVATE ${RTAUDIO_INCLUDE_DIRS})
+    target_link_directories(hackrf_source PRIVATE ${RTAUDIO_LIBRARY_DIRS})
+    target_link_libraries(hackrf_source PRIVATE ${RTAUDIO_LIBRARIES})
 endif ()
