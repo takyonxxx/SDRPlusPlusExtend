@@ -28,7 +28,7 @@ public:
 
         inputParameters.channelCount = 2;
         inputParameters.sampleFormat = paFloat32;
-        inputParameters.suggestedLatency = deviceInfo->defaultHighInputLatency;
+        inputParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
         inputParameters.hostApiSpecificStreamInfo = nullptr;
 
         err = Pa_OpenStream(&stream, &inputParameters, nullptr, SAMPLE_RATE, FRAMES_PER_BUFFER, paClipOff, &PortAudioSource::paCallback, this);
@@ -597,10 +597,9 @@ private:
     int apply_modulation(int8_t* buffer, uint32_t length) {
 
         int decimation = 1;
-
         int size = length / 2;
 
-        std::vector<float> float_buffer = stream.readBufferToVector();
+        std::vector<float> float_buffer;
         while (float_buffer.size() < size) {
             std::vector<float> additional_data = stream.readBufferToVector();
             float_buffer.insert(float_buffer.end(), additional_data.begin(), additional_data.end());
