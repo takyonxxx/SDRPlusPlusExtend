@@ -57,4 +57,9 @@ else (MSVC)
     target_include_directories(hackrf_source PRIVATE ${RTAUDIO_INCLUDE_DIRS})
     target_link_directories(hackrf_source PRIVATE ${RTAUDIO_LIBRARY_DIRS})
     target_link_libraries(hackrf_source PRIVATE ${RTAUDIO_LIBRARIES})
+
+    find_package(Boost 1.85 REQUIRED)
+    target_include_directories(hackrf_source PRIVATE ${Boost_INCLUDE_DIRS})
+    target_link_libraries(hackrf_source PRIVATE ${Boost_LIBRARIES})
+
 endif ()

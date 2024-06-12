@@ -15,21 +15,32 @@ public:
             exit(1);
         }
 
-    for (int deviceId : audio.getDeviceIds()) {
-        try {
-            // Cihaz bilgilerini al
-            auto info = audio.getDeviceInfo(deviceId);
-            std::cout << "DeviceId: " << deviceId << ", Name: " << info.name << std::endl;
+#if RTAUDIO_VERSION_MAJOR >= 6
+            for (int i : audio.getDeviceIds()) {
+#else
+            int count = audio.getDeviceCount();
+            for (int i = 0; i < count; i++) {
+#endif
+                try {
+                    // Get info
+                    auto info = audio.getDeviceInfo(i);
 
-            if (info.name.find("MacBook Pro Microphone") != std::string::npos) {
-                std::cout << "MacBook Pro Microphone bulundu!" << std::endl;
-                selectedDevice = deviceId;
-                break; // İstenen cihazı bulduktan sonra döngüden çık
+#if !defined(RTAUDIO_VERSION_MAJOR) || RTAUDIO_VERSION_MAJOR < 6
+                    if (!info.probed) { continue; }
+#endif \
+    // Check that it has a stereo input
+                    if (info.inputChannels < 2) { continue; }
+
+                    if (info.name.find("Microphone") != std::string::npos) {
+                        selectedDevice = i;
+                        break;
+                    }
+                }
+                catch (const std::exception& e) {
+                    flog::error("Error getting audio device ({}) info: {}", i, e.what());
+                }
             }
-        } catch (const std::exception& e) {
-            flog::error("Audio cihazı ({}) bilgisi alınırken hata oluştu: {}", deviceId, e.what());
-        }
-    }
+
 
 // Set the error callback function
 #if RTAUDIO_VERSION_MAJOR >= 6
@@ -42,7 +53,7 @@ public:
         RtAudio::DeviceInfo deviceInfo = audio.getDeviceInfo(parameters.deviceId);
         std::cout << "Using audio device: " << deviceInfo.name << std::endl;
 
-        parameters.nChannels = 1;
+        parameters.nChannels = 2;
         parameters.firstChannel = 0;
         unsigned int bufferFrames = FRAMES_PER_BUFFER;
         RtAudio::StreamOptions opts;
@@ -155,7 +166,7 @@ public:
         const PaDeviceInfo* deviceInfo = Pa_GetDeviceInfo(inputParameters.device);
         std::cout << "Using input device: " << deviceInfo->name << std::endl;
 
-        inputParameters.channelCount = 1;
+        inputParameters.channelCount = 2;
         inputParameters.sampleFormat = paFloat32;
         inputParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
         inputParameters.hostApiSpecificStreamInfo = nullptr;

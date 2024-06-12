@@ -22,8 +22,8 @@ public:
         handler.tuneHandler = tune;
         handler.stream = &stream;
 
-//        rtAudioSource = new RtAudiSource(stream);
-        portAudioSource = new PortAudioSource(stream);
+        rtAudioSource = new RtAudiSource(stream);
+        // portAudioSource = new PortAudioSource(stream);
 
         refresh();
 
@@ -547,12 +547,11 @@ private:
         FrequencyModulator modulator(sensitivity);
         modulator.work(noutput_items, float_buffer, modulated_signal);
 
-//        RationalResampler resampler(interpolation, decimation, filter_size);
-//        std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
+        RationalResampler resampler(interpolation, decimation, filter_size);
+        std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
 
-        float fractional_bw = 0.4;
-
-        auto resampled_signal = design_and_resample(modulated_signal, interpolation, decimation, fractional_bw);
+        // float fractional_bw = 0.4;
+        // auto resampled_signal = design_and_resample(modulated_signal, interpolation, decimation, fractional_bw);
 
         for (int i = 0; i < noutput_items; ++i) {            
             float real_part = std::real(resampled_signal[i]);

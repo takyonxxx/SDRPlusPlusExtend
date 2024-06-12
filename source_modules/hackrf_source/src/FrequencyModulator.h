@@ -23,61 +23,31 @@ void sincos(int32_t angle, float* sin_out, float* cos_out) {
 
 class FrequencyModulator {
 public:
-    FrequencyModulator(float sensitivity)
-        : d_sensitivity(sensitivity), d_phase(0.0f), alpha(0.75f), prev(0.0f) {}
+   FrequencyModulator(float sensitivity)
+       : d_sensitivity(sensitivity), d_phase(0.0f), alpha(0.75f), prev(0.0f) {}
 
-    int work(int noutput_items, const std::vector<float>& input_items, std::vector<std::complex<float>>& output_items) {
-        output_items.resize(noutput_items);
-        for (int i = 0; i < noutput_items; ++i) {
-            // Apply pre-emphasis filter
-            float in = input_items[i];
-            float pre_emphasis = in - alpha * prev;
-            prev = in;
-            d_phase += d_sensitivity * pre_emphasis;
-            // Place phase in [-pi, +pi[
-            d_phase = std::fmod(d_phase + F_PI, 2.0f * F_PI) - F_PI;
-            float oi, oq;
-            int32_t angle = fxpt::float_to_fixed(d_phase);
-            fxpt::sincos(angle, &oq, &oi);
-            output_items[i] = std::complex<float>(oi, oq);
-        }
-        return noutput_items;
-    }
+   int work(int noutput_items, const std::vector<float>& input_items, std::vector<std::complex<float>>& output_items) {
+       for (int i = 0; i < noutput_items; ++i) {
+           // Apply pre-emphasis filter
+           float in = input_items[i];
+           float pre_emphasis = in - alpha * prev;
+           prev = in;
+           d_phase += d_sensitivity * pre_emphasis;
+           // Place phase in [-pi, +pi[
+           d_phase = std::fmod(d_phase + F_PI, 2.0f * F_PI) - F_PI;
+           float oi, oq;
+           int32_t angle = fxpt::float_to_fixed(d_phase);
+           fxpt::sincos(angle, &oq, &oi);
+           output_items[i] = std::complex<float>(oi, oq);
+       }
+       return noutput_items;
+   }
 
 private:
-    float d_sensitivity;
-    float d_phase;
-    float alpha; // Pre-emphasis filter coefficient
-    float prev;  // Previous input for the pre-emphasis filter
+   float d_sensitivity;
+   float d_phase;
+   float alpha; // Pre-emphasis filter coefficient
+   float prev;  // Previous input for the pre-emphasis filter
 };
-
-//class FrequencyModulator {
-//public:
-//    FrequencyModulator(float sensitivity)
-//        : d_sensitivity(sensitivity), d_phase(0.0f), alpha(0.75f), prev(0.0f) {}
-
-//    int work(int noutput_items, const std::vector<float>& input_items, std::vector<std::complex<float>>& output_items) {
-//        for (int i = 0; i < noutput_items; ++i) {
-//            // Apply pre-emphasis filter
-//            float in = input_items[i];
-//            float pre_emphasis = in - alpha * prev;
-//            prev = in;
-//            d_phase += d_sensitivity * pre_emphasis;
-//            // Place phase in [-pi, +pi[
-//            d_phase = std::fmod(d_phase + F_PI, 2.0f * F_PI) - F_PI;
-//            float oi, oq;
-//            int32_t angle = fxpt::float_to_fixed(d_phase);
-//            fxpt::sincos(angle, &oq, &oi);
-//            output_items[i] = std::complex<float>(oi, oq);
-//        }
-//        return noutput_items;
-//    }
-
-//private:
-//    float d_sensitivity;
-//    float d_phase;
-//    float alpha; // Pre-emphasis filter coefficient
-//    float prev;  // Previous input for the pre-emphasis filter
-//};
 
 #endif // FREQUENCYMODULATOR_H
