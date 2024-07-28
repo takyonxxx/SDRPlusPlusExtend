@@ -88,7 +88,7 @@ The preferred IDE is [VS Code](https://code.visualstudio.com/) in order to have 
 * [cmake](https://cmake.org)
 * [vcpkg](https://vcpkg.io)
 * Clone the vcpkg repository: git clone https://github.com/Microsoft/vcpkg.git
-Run the bootstrap script: .\vcpkg\bootstrap-vcpkg.bat
+* Run the bootstrap script: .\vcpkg\bootstrap-vcpkg.bat
 * [PothosSDR](https://github.com/pothosware/PothosSDR) (This will install libraries for most SDRs. You have to install it in `C:/Program Files/PothosSDR`)
 * [RtAudio](https://www.music.mcgill.ca/~gary/rtaudio/) (You have to build and install it in `C:/Program Files (x86)/RtAudio/`)
 
