@@ -87,6 +87,8 @@ The preferred IDE is [VS Code](https://code.visualstudio.com/) in order to have 
 
 * [cmake](https://cmake.org)
 * [vcpkg](https://vcpkg.io)
+* Clone the vcpkg repository: git clone https://github.com/Microsoft/vcpkg.git
+* Run the bootstrap script: .\vcpkg\bootstrap-vcpkg.bat
 * [PothosSDR](https://github.com/pothosware/PothosSDR) (This will install libraries for most SDRs. You have to install it in `C:/Program Files/PothosSDR`)
 * [RtAudio](https://www.music.mcgill.ca/~gary/rtaudio/) (You have to build and install it in `C:/Program Files (x86)/RtAudio/`)
 
@@ -105,7 +107,7 @@ You are probably going to build in 64 bit so make sure vcpkg installs the correc
 ```
 mkdir build
 cd build
-cmake .. "-DCMAKE_TOOLCHAIN_FILE=<vcpkg install directory>/scripts/buildsystems/vcpkg.cmake" -G "Visual Studio 16 2019"
+cmake .. "-DCMAKE_TOOLCHAIN_FILE=<vcpkg install directory>/scripts/buildsystems/vcpkg.cmake" -G "Visual Studio 17 2022"
 cmake --build . --config Release
 ```
 
