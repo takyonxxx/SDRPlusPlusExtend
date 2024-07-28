@@ -6,20 +6,19 @@ file(GLOB SRC "src/*.cpp")
 include(${SDRPP_MODULE_CMAKE})
 
 if (MSVC)
-    # Lib path
-    target_link_directories(audio_sink PRIVATE "C:/Program Files (x86)/RtAudio/lib")
+    # Include directory for RtAudio
+    target_include_directories(audio_sink PRIVATE "C:/Users/turka/vcpkg/installed/x64-windows/include/rtaudio")
 
-    # Misc headers
-    target_include_directories(audio_sink PRIVATE "C:/Program Files (x86)/RtAudio/include/rtaudio")
+    # Library directory for RtAudio
+    target_link_directories(audio_sink PRIVATE "C:/Users/turka/vcpkg/installed/x64-windows/lib")
 
+    # Link the RtAudio library
     target_link_libraries(audio_sink PRIVATE rtaudio)
-else (MSVC)
-    find_package(PkgConfig)
-
+else()
+    find_package(PkgConfig REQUIRED)
     pkg_check_modules(RTAUDIO REQUIRED rtaudio)
 
     target_include_directories(audio_sink PRIVATE ${RTAUDIO_INCLUDE_DIRS})
     target_link_directories(audio_sink PRIVATE ${RTAUDIO_LIBRARY_DIRS})
     target_link_libraries(audio_sink PRIVATE ${RTAUDIO_LIBRARIES})
-
-endif ()
+endif()

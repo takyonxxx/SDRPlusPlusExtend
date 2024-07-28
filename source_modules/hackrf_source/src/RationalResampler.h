@@ -1,11 +1,9 @@
 #ifndef RATIONALRESAMPLER_H
 #define RATIONALRESAMPLER_H
-#include <iostream>
 #include <vector>
 #include <cmath>
 #include <complex>
 #include <stdexcept>
-#include <algorithm>
 #include <stdexcept>
 #include <string>
 // #include <boost/math/special_functions/bessel.hpp>

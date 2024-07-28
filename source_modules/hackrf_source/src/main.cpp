@@ -2,6 +2,7 @@
 #include "FrequencyModulator.h"
 #include "RationalResampler.h"
 #include "audiosource.h"
+#include <filesystem>
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:

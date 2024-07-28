@@ -23,10 +23,10 @@ if (MSVC)
     target_link_libraries(hackrf_source PRIVATE portaudio)
 
     # Lib path
-    target_link_directories(hackrf_source PRIVATE "C:/Program Files (x86)/RtAudio/lib")
+    target_link_directories(hackrf_source PRIVATE "C:/Users/turka/vcpkg/installed/x64-windows/lib")
 
     # Misc headers
-    target_include_directories(hackrf_source PRIVATE "C:/Program Files (x86)/RtAudio/include/rtaudio")
+    target_include_directories(hackrf_source PRIVATE "C:/Users/turka/vcpkg/installed/x64-windows/include/rtaudio")
 
     target_link_libraries(hackrf_source PRIVATE rtaudio)
 
