@@ -1,18 +1,21 @@
 cmake_minimum_required(VERSION 3.13)
 project(audio_sink)
 
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+  set(CMAKE_TOOLCHAIN_FILE "C:/Users/turka/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+endif()
+
 file(GLOB SRC "src/*.cpp")
 
 include(${SDRPP_MODULE_CMAKE})
 
 if (MSVC)
-    # Lib path
-    target_link_directories(audio_sink PRIVATE "C:/Program Files (x86)/RtAudio/lib")
+    # Find and link RtAudio via vcpkg
+    find_package(RtAudio CONFIG REQUIRED)
 
-    # Misc headers
-    target_include_directories(audio_sink PRIVATE "C:/Program Files (x86)/RtAudio/include/rtaudio")
+    target_include_directories(audio_sink PRIVATE ${RTAUDIO_INCLUDE_DIRS})
+    target_link_libraries(audio_sink PRIVATE RtAudio::rtaudio)
 
-    target_link_libraries(audio_sink PRIVATE rtaudio)
 else (MSVC)
     find_package(PkgConfig)
 
