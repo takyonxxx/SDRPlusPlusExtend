@@ -1,7 +1,6 @@
 #ifndef AUDIOSOURCE_H
 #define AUDIOSOURCE_H
 #include <iostream>
-#include <portaudio.h>
 #include <RtAudio.h>
 #include <signal_path/signal_path.h>
 #include <stdexcept>
@@ -143,96 +142,4 @@ private:
     }
 #endif
 };
-
-
-class PortAudioSource {
-public:
-    PortAudioSource(dsp::stream<dsp::complex_t>& stream_buffer) : stream_buffer(stream_buffer), stream(nullptr)
-    {
-        err = Pa_Initialize();
-        if (err != paNoError) {
-            std::cerr << "PortAudioSource initialization failed: " << Pa_GetErrorText(err) << std::endl;
-            return;
-        }
-
-        PaStreamParameters inputParameters;
-        inputParameters.device = Pa_GetDefaultInputDevice();
-        if (inputParameters.device == paNoDevice) {
-            std::cerr << "Error: No default input device found!" << std::endl;
-            Pa_Terminate();
-            return;
-        }
-
-        const PaDeviceInfo* deviceInfo = Pa_GetDeviceInfo(inputParameters.device);
-        std::cout << "Using input device: " << deviceInfo->name << std::endl;
-
-        inputParameters.channelCount = 2;
-        inputParameters.sampleFormat = paFloat32;
-        inputParameters.suggestedLatency = deviceInfo->defaultLowInputLatency;
-        inputParameters.hostApiSpecificStreamInfo = nullptr;
-
-        err = Pa_OpenStream(&stream, &inputParameters, nullptr, SAMPLE_RATE, FRAMES_PER_BUFFER, paClipOff, &PortAudioSource::paCallback, this);
-        if (err != paNoError) {
-            std::cerr << "Failed to open audio stream: " << Pa_GetErrorText(err) << std::endl;
-            Pa_Terminate();
-            return;
-        }
-    }
-
-    ~PortAudioSource()
-    {
-        if (stream) {
-            Pa_CloseStream(stream);
-            Pa_Terminate();
-        }
-        stream = nullptr;
-    }
-
-    bool start()
-    {
-        err = Pa_StartStream(stream);
-        if (err != paNoError) {
-            std::cerr << "PortAudio error: " << Pa_GetErrorText(err) << std::endl;
-            Pa_Terminate();
-            return false;
-        }        
-        std::cerr << "PortAudioSource started." << std::endl;
-        return true;
-    }
-
-    bool stop()
-    {
-        if (stream) {
-            Pa_StopStream(stream);
-        }
-        std::cout << "PortAudioSource stopped." << std::endl;        
-        return true;
-    }
-
-private:
-    PaStream* stream;
-    PaError err;    
-    dsp::stream<dsp::complex_t>& stream_buffer;
-
-    static const int SAMPLE_RATE = 44100;
-    static const int FRAMES_PER_BUFFER = 4096;
-
-    static int paCallback(const void* inputBuffer, void* outputBuffer,
-                          unsigned long framesPerBuffer,
-                          const PaStreamCallbackTimeInfo* timeInfo,
-                          PaStreamCallbackFlags statusFlags,
-                          void* userData) {
-        PortAudioSource* _this = static_cast<PortAudioSource*>(userData);
-
-        // volk_8i_s32f_convert_32f((float*)_this->stream_buffer.writeBuf, in, 128.0f, framesPerBuffer);
-        // if (!_this->stream_buffer.swap(framesPerBuffer)) { return -1; }
-
-        memcpy(_this->stream_buffer.writeBuf, inputBuffer, framesPerBuffer * sizeof(dsp::complex_t));
-        _this->stream_buffer.swap(framesPerBuffer);
-
-        return paContinue;
-    }
-
-};
-
 #endif // AUDIOSOURCE_H

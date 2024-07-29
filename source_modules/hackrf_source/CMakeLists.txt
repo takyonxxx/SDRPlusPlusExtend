@@ -9,16 +9,25 @@ file(GLOB SRC "src/*.cpp")
 
 include(${SDRPP_MODULE_CMAKE})
 
+target_sources(hackrf_source
+  PRIVATE
+    src/constants.h
+    src/hackrfsourcemodule.h
+    src/FrequencyModulator.h
+    src/RationalResampler.h
+    src/audiosource.h
+)
+
 if (MSVC)
-   # Find and link RtAudio via vcpkg
-   find_package(RtAudio CONFIG REQUIRED)
-
-   target_include_directories(hackrf_source PRIVATE ${RTAUDIO_INCLUDE_DIRS})
-   target_link_libraries(hackrf_source PRIVATE RtAudio::rtaudio)
-
     # Lib path
     target_link_directories(hackrf_source PRIVATE "C:/Program Files/PothosSDR/bin/")
     target_link_libraries(hackrf_source PRIVATE hackrf)
+
+    # Find and link RtAudio via vcpkg
+    find_package(RtAudio CONFIG REQUIRED)
+
+    target_include_directories(hackrf_source PRIVATE ${RTAUDIO_INCLUDE_DIRS})
+    target_link_libraries(hackrf_source PRIVATE RtAudio::rtaudio)
 
 elseif (ANDROID)
     target_include_directories(hackrf_source PUBLIC
@@ -33,8 +42,23 @@ else (MSVC)
     find_package(PkgConfig)
 
     pkg_check_modules(LIBHACKRF REQUIRED libhackrf)
-
     target_include_directories(hackrf_source PRIVATE ${LIBHACKRF_INCLUDE_DIRS})
     target_link_directories(hackrf_source PRIVATE ${LIBHACKRF_LIBRARY_DIRS})
     target_link_libraries(hackrf_source PRIVATE ${LIBHACKRF_LIBRARIES})
+
+    pkg_check_modules(PORTAUDIO REQUIRED portaudio-2.0)
+    target_include_directories(hackrf_source PRIVATE ${PORTAUDIO_INCLUDE_DIRS})
+    target_link_directories(hackrf_source PRIVATE ${PORTAUDIO_LIBRARY_DIRS})
+    target_link_libraries(hackrf_source PRIVATE ${PORTAUDIO_LIBRARIES})
+
+    pkg_check_modules(RTAUDIO REQUIRED rtaudio)
+
+    target_include_directories(hackrf_source PRIVATE ${RTAUDIO_INCLUDE_DIRS})
+    target_link_directories(hackrf_source PRIVATE ${RTAUDIO_LIBRARY_DIRS})
+    target_link_libraries(hackrf_source PRIVATE ${RTAUDIO_LIBRARIES})
+
+    find_package(Boost 1.85 REQUIRED)
+    target_include_directories(hackrf_source PRIVATE ${Boost_INCLUDE_DIRS})
+    target_link_libraries(hackrf_source PRIVATE ${Boost_LIBRARIES})
+
 endif ()
