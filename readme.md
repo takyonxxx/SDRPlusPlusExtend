@@ -1,3 +1,4 @@
+# SDR++, At this clone version, only custom HackRf (with mic tx transmitter) and RTL-SDR modules are available<br>
 # SDR++, The bloat-free SDR software<br>
 
 ![Screenshot](https://i.imgur.com/Ter2MQJ.png)
