@@ -440,7 +440,7 @@ private:
             config.release(true);
         }
 
-        if (SmGui::Checkbox(CONCAT("Ptt Enabled - Tx Mode##_hackrf_ptt_", _this->name), &_this->ptt)) {
+        if (SmGui::Checkbox(CONCAT("Ptt Enabled##_hackrf_ptt_", _this->name), &_this->ptt)) {
 
             if (_this->running) {
                 _this->stop(ctx);

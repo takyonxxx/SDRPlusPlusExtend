@@ -162,55 +162,15 @@ int sdrpp_main(int argc, char* argv[]) {
     defConfig["menuWidth"] = 300;
     defConfig["min"] = -120.0;
 
-    // Module instances
-    defConfig["moduleInstances"]["Airspy Source"]["module"] = "airspy_source";
-    defConfig["moduleInstances"]["Airspy Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["AirspyHF+ Source"]["module"] = "airspyhf_source";
-    defConfig["moduleInstances"]["AirspyHF+ Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["Audio Source"]["module"] = "audio_source";
-    defConfig["moduleInstances"]["Audio Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["BladeRF Source"]["module"] = "bladerf_source";
-    defConfig["moduleInstances"]["BladeRF Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["File Source"]["module"] = "file_source";
-    defConfig["moduleInstances"]["File Source"]["enabled"] = true;
     defConfig["moduleInstances"]["HackRF Source"]["module"] = "hackrf_source";
     defConfig["moduleInstances"]["HackRF Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["Hermes Source"]["module"] = "hermes_source";
-    defConfig["moduleInstances"]["Hermes Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["LimeSDR Source"]["module"] = "limesdr_source";
-    defConfig["moduleInstances"]["LimeSDR Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["PlutoSDR Source"]["module"] = "plutosdr_source";
-    defConfig["moduleInstances"]["PlutoSDR Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["PerseusSDR Source"]["module"] = "perseus_source";
-    defConfig["moduleInstances"]["PerseusSDR Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["RFNM Source"]["module"] = "rfnm_source";
-    defConfig["moduleInstances"]["RFNM Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["RFspace Source"]["module"] = "rfspace_source";
-    defConfig["moduleInstances"]["RFspace Source"]["enabled"] = true;
+
     defConfig["moduleInstances"]["RTL-SDR Source"]["module"] = "rtl_sdr_source";
     defConfig["moduleInstances"]["RTL-SDR Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["RTL-TCP Source"]["module"] = "rtl_tcp_source";
-    defConfig["moduleInstances"]["RTL-TCP Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["SDRplay Source"]["module"] = "sdrplay_source";
-    defConfig["moduleInstances"]["SDRplay Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["SDR++ Server Source"]["module"] = "sdrpp_server_source";
-    defConfig["moduleInstances"]["SDR++ Server Source"]["enabled"] = true;
-    defConfig["moduleInstances"]["SpyServer Source"]["module"] = "spyserver_source";
-    defConfig["moduleInstances"]["SpyServer Source"]["enabled"] = true;
 
     defConfig["moduleInstances"]["Audio Sink"] = "audio_sink";
-    defConfig["moduleInstances"]["Network Sink"] = "network_sink";
-
-    defConfig["moduleInstances"]["Radio"] = "radio";
-
-    defConfig["moduleInstances"]["Frequency Manager"] = "frequency_manager";
+    defConfig["moduleInstances"]["Radio"] = "radio";  
     defConfig["moduleInstances"]["Recorder"] = "recorder";
-    defConfig["moduleInstances"]["Rigctl Server"] = "rigctl_server";
-    // defConfig["moduleInstances"]["Rigctl Client"] = "rigctl_client";
-    // TODO: Enable rigctl_client when ready
-    // defConfig["moduleInstances"]["Scanner"] = "scanner";
-    // TODO: Enable scanner when ready
-
 
     // Themes
     defConfig["theme"] = "Dark";
@@ -274,28 +234,11 @@ int sdrpp_main(int argc, char* argv[]) {
     int modCount = 0;
     core::configManager.conf["modules"] = json::array();
 
-    core::configManager.conf["modules"][modCount++] = "airspy_source.so";
-    core::configManager.conf["modules"][modCount++] = "airspyhf_source.so";
-    core::configManager.conf["modules"][modCount++] = "hackrf_source.so";
-    core::configManager.conf["modules"][modCount++] = "hermes_source.so";
-    core::configManager.conf["modules"][modCount++] = "plutosdr_source.so";
-    core::configManager.conf["modules"][modCount++] = "rfspace_source.so";
-    core::configManager.conf["modules"][modCount++] = "rtl_sdr_source.so";
-    core::configManager.conf["modules"][modCount++] = "rtl_tcp_source.so";
-    core::configManager.conf["modules"][modCount++] = "sdrpp_server_source.so";
-    core::configManager.conf["modules"][modCount++] = "spyserver_source.so";
-
-    core::configManager.conf["modules"][modCount++] = "network_sink.so";
+    core::configManager.conf["modules"][modCount++] = "hackrf_source.so";    
+    core::configManager.conf["modules"][modCount++] = "rtl_sdr_source.so";    
     core::configManager.conf["modules"][modCount++] = "audio_sink.so";
-
-    core::configManager.conf["modules"][modCount++] = "m17_decoder.so";
-    core::configManager.conf["modules"][modCount++] = "meteor_demodulator.so";
     core::configManager.conf["modules"][modCount++] = "radio.so";
-
-    core::configManager.conf["modules"][modCount++] = "frequency_manager.so";
     core::configManager.conf["modules"][modCount++] = "recorder.so";
-    core::configManager.conf["modules"][modCount++] = "rigctl_server.so";
-    core::configManager.conf["modules"][modCount++] = "scanner.so";
 #endif
 
     // Fix missing elements in config
