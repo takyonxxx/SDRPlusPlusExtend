@@ -1,8 +1,7 @@
-#include "hackrfsourcemodule.h"
+#include "Constants.h"
 #include "FrequencyModulator.h"
 #include "RationalResampler.h"
-#include "audiosource.h"
-#include <filesystem>
+#include "AudioSource.h"
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:
@@ -445,11 +444,9 @@ private:
             if (_this->running) {
                 _this->stop(ctx);
             }
-
-
-            _this->stream.flush();
-
+            // _this->stream.flush();
             _this->start(ctx);
+            flog::info("HackRFSourceModule '{0}': Ptt Enabled!", _this->name);
 
             config.acquire();
             config.conf["devices"][_this->selectedSerial]["ptt"] = _this->ptt;

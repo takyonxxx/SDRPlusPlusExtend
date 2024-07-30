@@ -12,11 +12,10 @@ include(${SDRPP_MODULE_CMAKE})
 
 target_sources(hackrf_source
   PRIVATE
-    src/constants.h
-    src/hackrfsourcemodule.h
+    src/Constants.h
     src/FrequencyModulator.h
     src/RationalResampler.h
-    src/audiosource.h
+    src/AudioSource.h
 )
 
 if (MSVC)

@@ -1,5 +1,5 @@
-#ifndef HACKRFSOURCEMODULE_H
-#define HACKRFSOURCEMODULE_H
+#ifndef CONSTANTS_H
+#define CONSTANTS_H
 
 #include <iostream>
 #include <string>
@@ -15,16 +15,7 @@
 #include <chrono>
 #include <random>
 #include <condition_variable>
-#include <utils/flog.h>
-#include <module.h>
-#include <math.h>
-#include <gui/gui.h>
-#include <signal_path/signal_path.h>
-#include <core.h>
-#include <gui/style.h>
-#include <config.h>
-#include <gui/widgets/stepped_slider.h>
-#include <gui/smgui.h>
+#include <filesystem>
 
 #ifndef __ANDROID__
 #include <libhackrf/hackrf.h>
@@ -33,8 +24,31 @@
 #include <hackrf.h>
 #endif
 
+#include <utils/flog.h>
+#include <module.h>
+#include <gui/gui.h>
+#include <signal_path/signal_path.h>
+#include <core.h>
+#include <gui/style.h>
+#include <config.h>
+#include <gui/widgets/stepped_slider.h>
+#include <gui/smgui.h>
 
 namespace fs = std::filesystem;
+
+#define _GHZ(x) ((uint64_t)(x) * 1000000000)
+#define _MHZ(x) ((x) * 1000000)
+#define _KHZ(x) ((x) * 1000)
+#define _HZ(x) ((x) * 1)
+
+#define DEBUG 1
+#define BUF_LEN 262144   // hackrf tx buf
+#define BYTES_PER_SAMPLE 2
+#define CARRIER_FREQUENCY 100e6
+#define DEVIATION 75e3
+#define AUDIO_SAMPLE_RATE 44100
+
+constexpr double TWO_PI = 6.283185307179586;
 
 #define CONCAT(a, b) ((std::string(a) + b).c_str())
 
@@ -98,5 +112,5 @@ const char* bandwidthsTxt = "1.75MHz\0"
                             "24MHz\0"
                             "28MHz\0"
                             "Auto\0";
-#endif // HACKRFSOURCEMODULE_H
 
+#endif // CONSTANTS_H
