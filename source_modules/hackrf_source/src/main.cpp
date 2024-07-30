@@ -444,8 +444,10 @@ private:
             if (_this->running) {
                 _this->stop(ctx);
             }
-            // _this->stream.flush();
+
+            _this->stream.flush();
             _this->start(ctx);
+
             flog::info("HackRFSourceModule '{0}': Ptt Enabled!", _this->name);
 
             config.acquire();
