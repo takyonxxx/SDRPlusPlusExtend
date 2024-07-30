@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.13)
 project(audio_sink)
 
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-  set(CMAKE_TOOLCHAIN_FILE "C:/Users/turka/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+    #set(CMAKE_TOOLCHAIN_FILE "C:/Users/turka/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+    set(CMAKE_TOOLCHAIN_FILE "C:/Users/MarenCompEng/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
 endif()
 
 file(GLOB SRC "src/*.cpp")

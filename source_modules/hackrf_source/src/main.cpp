@@ -509,41 +509,41 @@ private:
 
     int apply_modulation(int8_t* buffer, uint32_t length) {
 
-        // int decimation = 1;
-        // int size = length / 2;
+        int decimation = 1;
+        int size = length / 2;
 
-        // std::vector<float> float_buffer;
-        // while (float_buffer.size() < size) {
-        //     std::vector<float> additional_data = stream.readBufferToVector();
-        //     float_buffer.insert(float_buffer.end(), additional_data.begin(), additional_data.end());
-        // }
+        std::vector<float> float_buffer;
+        while (float_buffer.size() < size) {
+            std::vector<float> additional_data = stream.readBufferToVector();
+            float_buffer.insert(float_buffer.end(), additional_data.begin(), additional_data.end());
+        }
 
-        // int noutput_items = float_buffer.size();
+        int noutput_items = float_buffer.size();
 
-        // for (int i = 0; i < noutput_items; ++i) {
-        //     float_buffer[i] *= this->amplitude;
-        // }
+        for (int i = 0; i < noutput_items; ++i) {
+            float_buffer[i] *= this->amplitude;
+        }
 
-        // std::vector<std::complex<float>> modulated_signal(noutput_items);
+        std::vector<std::complex<float>> modulated_signal(noutput_items);
 
-        // float sensitivity = modulation_index;
-        // FrequencyModulator modulator(sensitivity);
-        // modulator.work(noutput_items, float_buffer, modulated_signal);
+        float sensitivity = modulation_index;
+        FrequencyModulator modulator(sensitivity);
+        modulator.work(noutput_items, float_buffer, modulated_signal);
 
-        // RationalResampler resampler(interpolation, decimation, filter_size);
-        // std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
+        RationalResampler resampler(interpolation, decimation, filter_size);
+        std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
 
-        // // float fractional_bw = 0.4;
-        // // auto resampled_signal = design_and_resample(modulated_signal, interpolation, decimation, fractional_bw);
+        // float fractional_bw = 0.4;
+        // auto resampled_signal = design_and_resample(modulated_signal, interpolation, decimation, fractional_bw);
 
-        // for (int i = 0; i < noutput_items; ++i) {
-        //     float real_part = std::real(resampled_signal[i]);
-        //     float imag_part = std::imag(resampled_signal[i]);
-        //     int8_t real_scaled = static_cast<int8_t>(real_part * 127.0f);
-        //     int8_t imag_scaled = static_cast<int8_t>(imag_part * 127.0f);
-        //     buffer[2 * i] = real_scaled;
-        //     buffer[2 * i + 1] = imag_scaled;
-        // }
+        for (int i = 0; i < noutput_items; ++i) {
+            float real_part = std::real(resampled_signal[i]);
+            float imag_part = std::imag(resampled_signal[i]);
+            int8_t real_scaled = static_cast<int8_t>(real_part * 127.0f);
+            int8_t imag_scaled = static_cast<int8_t>(imag_part * 127.0f);
+            buffer[2 * i] = real_scaled;
+            buffer[2 * i + 1] = imag_scaled;
+        }
 
         return 0;
     }    

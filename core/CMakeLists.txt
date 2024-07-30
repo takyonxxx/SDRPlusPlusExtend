@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.13)
 project(sdrpp_core)
 
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    #set(CMAKE_TOOLCHAIN_FILE "C:/Users/turka/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+    set(CMAKE_TOOLCHAIN_FILE "C:/Users/MarenCompEng/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")
+endif()
+
 if (USE_INTERNAL_LIBCORRECT)
     add_subdirectory("libcorrect/")
 endif (USE_INTERNAL_LIBCORRECT)
@@ -39,6 +44,9 @@ target_compile_definitions(sdrpp_core PUBLIC INSTALL_PREFIX="${CMAKE_INSTALL_PRE
 # Include core headers
 target_include_directories(sdrpp_core PUBLIC "src/")
 target_include_directories(sdrpp_core PUBLIC "src/imgui")
+
+# target_include_directories(sdrpp_core PUBLIC "${CMAKE_SOURCE_DIR}/libs")
+# target_link_directories(sdrpp_core PUBLIC "${CMAKE_SOURCE_DIR}/libs")
 
 # Configure backend includes and libraries
 if (OPT_BACKEND_GLFW)

@@ -2,36 +2,11 @@ cmake ../SDRPlusPlusExtend -DCMAKE_TOOLCHAIN_FILE=C:/Users/MarenCompEng/vcpkg/sc
 cmake --build . --target clean
 cmake --build . --config Release
 
-vcpkg install glfw3
-vcpkg install fftw3
-vcpkg install zstd
-vcpkg install boost
-vcpkg install volk
-vcpkg install rtaudio
+https://downloads.myriadrf.org/builds/PothosSDR/
 
-
-# Lib path
-target_link_directories(hackrf_source PRIVATE "C:/Users/MarenCompEng/vcpkg/installed/x64-windows/lib")
-
-# Misc headers
-target_include_directories(hackrf_source PRIVATE "C:/Users/MarenCompEng/vcpkg/installed/x64-windows/include/rtaudio")
-
-
- set(VCPKG_PATH "C:/Users/MarenCompEng/vcpkg/installed/x64-windows")
-    target_link_directories(sdrpp_core PUBLIC "${VCPKG_PATH}/lib/")
-
-    # Add the Volk include directory
-    target_include_directories(sdrpp_core PUBLIC
-        "${VCPKG_PATH}/include"
-    )
-
-    # Create a custom target to copy volk.h to a volk subdirectory
-    add_custom_target(copy_volk_header ALL
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${VCPKG_PATH}/include/volk"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${VCPKG_PATH}/include/volk.h" "${VCPKG_PATH}/include/volk/volk.h"
-    )
-
-    # Make sdrpp_core depend on the copy_volk_header target
-    add_dependencies(sdrpp_core copy_volk_header)
-
-    target_link_libraries(sdrpp_core PUBLIC volk)
+.\vcpkg install boost
+.\vcpkg install glfw3
+.\vcpkg install fftw3
+.\vcpkg install zstd
+.\vcpkg install volk
+.\vcpkg install rtaudio
