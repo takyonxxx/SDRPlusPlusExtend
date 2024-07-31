@@ -112,22 +112,32 @@ target_link_libraries(sdrpp PRIVATE sdrpp_core)
 # Compiler arguments
 target_compile_options(sdrpp PRIVATE ${SDRPP_COMPILER_FLAGS})
 
-# Copy dynamic libs over
 if (MSVC)
     add_custom_target(do_always ALL xcopy /s \"$<TARGET_FILE_DIR:sdrpp_core>\\*.dll\" \"$<TARGET_FILE_DIR:sdrpp>\" /Y)
     add_custom_target(do_always_volk ALL xcopy /s \"C:/Program Files/PothosSDR/bin\\volk.dll\" \"$<TARGET_FILE_DIR:sdrpp>\" /Y)
+
+    # Create the directory if it doesn't exist
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/Release/modules")
+
+    # Define the target and post-build command as above
+    add_custom_command(TARGET sdrpp
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:hackrf_source>
+        "${CMAKE_BINARY_DIR}/Release/modules/"
+        COMMENT "Copying hackrf_source.dll to modules directory"
+    )
 
     if (COPY_MSVC_REDISTRIBUTABLES)
         # Get the list of Visual C++ runtime DLLs
         set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP True)
         include(InstallRequiredSystemLibraries)
-
-        # Create a space sperated list
+        # Create a space separated list
         set(REDIST_DLLS_STR "")
         foreach(DLL IN LISTS CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
             set(REDIST_DLLS_STR COMMAND xcopy /F \"${DLL}\" \"$<TARGET_FILE_DIR:sdrpp>\" /Y ${REDIST_DLLS_STR})
         endforeach()
-        
+
         # Create target
         add_custom_target(do_always_msvc ALL ${REDIST_DLLS_STR})
     endif ()

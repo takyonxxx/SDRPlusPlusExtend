@@ -50,7 +50,6 @@ public:
         parameters.deviceId = selectedDevice;
 
         RtAudio::DeviceInfo deviceInfo = audio.getDeviceInfo(parameters.deviceId);
-        std::cout << "Using audio device: " << deviceInfo.name << std::endl;
 
         parameters.nChannels = 2;
         parameters.firstChannel = 0;
