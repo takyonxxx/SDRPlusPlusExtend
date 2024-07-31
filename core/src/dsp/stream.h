@@ -3,6 +3,7 @@
 #include <string.h>
 #include <vector>
 #include <mutex>
+#include <complex>
 #include <condition_variable>
 #include <volk/volk.h>
 #include "buffer/buffer.h"
@@ -83,9 +84,8 @@ namespace dsp {
                 return value;
             } else if constexpr (std::is_arithmetic_v<U>) {
                 return static_cast<float>(value);
-            } else if constexpr (std::is_same_v<U, dsp::complex_t>) {
-                // Assuming dsp::complex_t has real and imag parts accessible
-                return std::sqrt(value.re * value.re + value.im * value.im);
+            } else if constexpr (std::is_same_v<U, std::complex<float>>) {
+                return std::abs(value);
             } else {
                 // For any other types, you might need to add more specific handling
                 return 0.0f;  // Default case, adjust as needed
