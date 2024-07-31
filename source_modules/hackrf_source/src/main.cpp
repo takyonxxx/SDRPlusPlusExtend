@@ -444,12 +444,9 @@ private:
             if (_this->running) {
                 _this->stop(ctx);
             }
-
             _this->stream.flush();
             _this->start(ctx);
-
-            flog::info("HackRFSourceModule '{0}': Ptt Enabled!", _this->name);
-
+            flog::info("HackRFSourceModule '{0}': Ptt Enabled! Value: {1}", _this->name, _this->ptt);
             config.acquire();
             config.conf["devices"][_this->selectedSerial]["ptt"] = _this->ptt;
             config.release(true);
@@ -532,9 +529,6 @@ private:
         RationalResampler resampler(interpolation, decimation, filter_size);
         std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
 
-        // float fractional_bw = 0.4;
-        // auto resampled_signal = design_and_resample(modulated_signal, interpolation, decimation, fractional_bw);
-
         for (int i = 0; i < noutput_items; ++i) {
             float real_part = std::real(resampled_signal[i]);
             float imag_part = std::imag(resampled_signal[i]);
@@ -549,6 +543,7 @@ private:
 
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
+        return 0;
         return _this->apply_modulation((int8_t *)transfer->buffer, transfer->valid_length);
     }
 
