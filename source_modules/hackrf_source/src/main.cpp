@@ -518,6 +518,7 @@ private:
 
         for (int i = 0; i < noutput_items; ++i) {
             float_buffer[i] *= this->amplitude;
+            std::cout << float_buffer[i] << std::endl;
         }
 
         std::vector<std::complex<float>> modulated_signal(noutput_items);
