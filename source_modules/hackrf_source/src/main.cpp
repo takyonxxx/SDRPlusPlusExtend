@@ -548,7 +548,7 @@ private:
         const double sine_wave_increment = 2.0 * M_PI * SINE_WAVE_FREQUENCY / sampleRate;
 
         for (size_t i = 0; i < length; ++i) {
-            double sine_wave_sample = sin(phase);
+            double sine_wave_sample = sin(phase) * this->amplitude;
             phase += modulation_sensitivity * sine_wave_sample;
             while (phase >= 2.0 * M_PI) {
                 phase -= 2.0 * M_PI;
