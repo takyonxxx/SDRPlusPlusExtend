@@ -14,44 +14,29 @@ public:
             exit(1);
         }
 
-#if RTAUDIO_VERSION_MAJOR >= 6
-            for (int i : audio.getDeviceIds()) {
-#else
-            int count = audio.getDeviceCount();
-            for (int i = 0; i < count; i++) {
-#endif
-                try {
-                    // Get info
-                    auto info = audio.getDeviceInfo(i);
+        RtAudio::DeviceInfo info;
 
-#if !defined(RTAUDIO_VERSION_MAJOR) || RTAUDIO_VERSION_MAJOR < 6
-                    if (!info.probed) { continue; }
-#endif \
-    // Check that it has a stereo input
-                    if (info.inputChannels < 2) { continue; }
-
-                    if (info.name.find("Microphone") != std::string::npos) {
-                        selectedDevice = i;
-                        break;
-                    }
-                }
-                catch (const std::exception& e) {
-                    flog::error("Error getting audio device ({}) info: {}", i, e.what());
+        for (int i : audio.getDeviceIds()) {
+            try {
+                // Get info
+                info = audio.getDeviceInfo(i);
+                std::cerr << "Mic device " << info.name << std::endl;
+                //if (info.inputChannels < 2) { continue; }
+                if (info.name.find("Microphone") != std::string::npos) {
+                    selectedDevice = i;
+                    std::cerr << "Found Mic device " << selectedDevice << std::endl;
+                    break;
                 }
             }
+            catch (const std::exception& e) {
+                flog::error("Error getting audio device ({}) info: {}", i, e.what());
+            }
+        }
 
-
-// Set the error callback function
-#if RTAUDIO_VERSION_MAJOR >= 6
         audio.setErrorCallback(&RtAudiSource::errorCallback);
-#endif
-
         RtAudio::StreamParameters parameters;
         parameters.deviceId = selectedDevice;
-
-        RtAudio::DeviceInfo deviceInfo = audio.getDeviceInfo(parameters.deviceId);
-
-        parameters.nChannels = 2;
+        parameters.nChannels = info.inputChannels;
         parameters.firstChannel = 0;
         unsigned int bufferFrames = FRAMES_PER_BUFFER;
         RtAudio::StreamOptions opts;
@@ -60,8 +45,9 @@ public:
 
         try {
             audio.openStream(nullptr, &parameters, RTAUDIO_FLOAT32, sampleRate, &bufferFrames, &RtAudiSource::callback, this, &opts);
-        } catch (const std::exception& e) {
-            std::cerr << "Error opening stream: " << e.what() << std::endl;
+            std::cout << "Stream opened successfully with device " << selectedDevice << std::endl;
+        } catch (const RtAudioErrorType& error) {
+            std::cerr << "Error opening stream: " << audio.getErrorText() << std::endl;
         }
     }
 
@@ -75,15 +61,13 @@ public:
         if (!audio.isStreamRunning()) {
             try {
                 audio.startStream();
-                std::cerr << "RtAudiSource started." << std::endl;
                 return true;
             } catch (const std::exception& e) {
                 std::cerr << "Error starting stream: " << e.what() << std::endl;
                 return false;
             }
         } else {
-            std::cerr << "Stream is already running." << std::endl;
-            return true; // Akış zaten çalışıyorsa başarılı olduğunu dön
+            return true;
         }
     }
 
@@ -92,15 +76,13 @@ public:
         if (audio.isStreamRunning()) {
             try {
                 audio.stopStream();
-                std::cout << "RtAudiSource stopped." << std::endl;
                 return true;
             } catch (const std::exception& e) {
                 std::cerr << "Error stopping stream: " << e.what() << std::endl;
                 return false;
             }
-        } else {
-            std::cerr << "Stream is not running." << std::endl;
-            return true; // Akış zaten durmuşsa başarılı olduğunu dön
+        } else {           
+            return true;
         }
     }
 
@@ -111,7 +93,15 @@ private:
     int selectedDevice;
 
     static const int SAMPLE_RATE = 44100;
-    static const int FRAMES_PER_BUFFER = 4096;
+    static const int FRAMES_PER_BUFFER = 512;
+
+    static bool is_zero(const dsp::complex_t& value) {
+        return value.re == 0 && value.im == 0;
+    }
+
+    static bool is_nan(const dsp::complex_t& value) {
+        return std::isnan(value.re) || std::isnan(value.im);
+    }
 
     static int callback(void* outputBuffer, void* inputBuffer, unsigned int nBufferFrames, double streamTime, RtAudioStreamStatus status, void* userData) {
         if (status) {
@@ -119,8 +109,16 @@ private:
         }
 
         RtAudiSource* _this = static_cast<RtAudiSource*>(userData);
-        memcpy(_this->stream_buffer.writeBuf, inputBuffer, nBufferFrames * sizeof(dsp::complex_t));
-        _this->stream_buffer.swap(nBufferFrames);
+        dsp::complex_t* buffer = static_cast<dsp::complex_t*>(inputBuffer);
+        size_t validSamples = 0;
+        for (unsigned int i = 0; i < nBufferFrames; ++i) {
+            if (is_nan(buffer[i])) {
+                continue;
+            }
+            _this->stream_buffer.writeBuf[validSamples] = buffer[i];
+            validSamples++;
+        }
+        _this->stream_buffer.swap(validSamples);
         return 0;
     }
 
@@ -128,14 +126,37 @@ private:
     static void errorCallback(RtAudioErrorType type, const std::string& errorText) {
         switch (type) {
         case RTAUDIO_NO_ERROR:
+            std::cout << "AudioSourceModule: No error" << std::endl;
             return;
         case RTAUDIO_WARNING:
+            std::cout << "AudioSourceModule Warning: " << errorText << std::endl;
+            break;
         case RTAUDIO_NO_DEVICES_FOUND:
+            std::cout << "AudioSourceModule Error: No devices found - " << errorText << std::endl;
+            break;
         case RTAUDIO_DEVICE_DISCONNECT:
-            std::cerr << "AudioSourceModule Warning: " << errorText << " (" << static_cast<int>(type) << ")" << std::endl;
+            std::cout << "AudioSourceModule Error: Device disconnected - " << errorText << std::endl;
+            break;
+        case RTAUDIO_INVALID_DEVICE:
+            std::cout << "AudioSourceModule Error: Invalid device - " << errorText << std::endl;
+            break;
+        case RTAUDIO_INVALID_PARAMETER:
+            std::cout << "AudioSourceModule Error: Invalid parameter - " << errorText << std::endl;
+            break;
+        case RTAUDIO_INVALID_USE:
+            std::cout << "AudioSourceModule Error: Invalid use - " << errorText << std::endl;
+            break;
+        case RTAUDIO_DRIVER_ERROR:
+            std::cout << "AudioSourceModule Error: Driver error - " << errorText << std::endl;
+            break;
+        case RTAUDIO_SYSTEM_ERROR:
+            std::cout << "AudioSourceModule Error: System error - " << errorText << std::endl;
+            break;
+        case RTAUDIO_THREAD_ERROR:
+            std::cout << "AudioSourceModule Error: Thread error - " << errorText << std::endl;
             break;
         default:
-            std::cerr << "AudioSourceModule Error: " << errorText << " (" << static_cast<int>(type) << ")" << std::endl;
+            std::cout << "AudioSourceModule Error: Unknown error type - " << errorText << " (" << static_cast<int>(type) << ")" << std::endl;
             break;
         }
     }

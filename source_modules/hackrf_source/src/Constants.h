@@ -50,7 +50,7 @@ namespace fs = std::filesystem;
 
 constexpr double TWO_PI = 6.283185307179586;
 constexpr double FREQUENCY_DEVIATION = 75.0;
-constexpr double SINE_WAVE_FREQUENCY = 440.0;
+constexpr double SINE_WAVE_FREQUENCY = 720.0;
 constexpr double AM_MOD_INDEX = 0.5;
 constexpr double WFM_MOD_INDEX = 5.0;
 

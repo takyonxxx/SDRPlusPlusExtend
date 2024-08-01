@@ -254,11 +254,7 @@ private:
             return;
         }
 
-#ifndef __ANDROID__
         hackrf_error err = (hackrf_error)hackrf_open_by_serial(_this->selectedSerial.c_str(), &_this->openDev);
-#else
-        hackrf_error err = (hackrf_error)hackrf_open_by_fd(_this->devFd, &_this->openDev);
-#endif
         if (err != HACKRF_SUCCESS) {
             flog::error("Could not open HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
             return;
@@ -268,6 +264,7 @@ private:
         if(_this->ptt)
         {
             _this->biasT = true;
+            _this->amp = true;
             _this->startRecording();
         }
         else
@@ -298,7 +295,8 @@ private:
     }
 
     static void stop(void* ctx) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;        
+        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
+        hackrf_error err;
 
         if (!_this->running) { return; }        
         _this->stream.stopWriter();
@@ -308,10 +306,17 @@ private:
             hackrf_stop_tx(_this->openDev);
             _this->stopRecording();
         }
-        else
-            hackrf_stop_rx(_this->openDev);
 
-        hackrf_error err = (hackrf_error)hackrf_close(_this->openDev);
+        hackrf_stop_rx(_this->openDev);
+
+        err = (hackrf_error)hackrf_reset(_this->openDev);
+        if (err != HACKRF_SUCCESS) {
+            flog::error("Could not reset HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        flog::info("HackRF {0} has been hard reset", _this->selectedSerial);
+
+        err = (hackrf_error)hackrf_close(_this->openDev);
         if (err != HACKRF_SUCCESS) {
             flog::error("Could not close HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
         }
@@ -498,6 +503,7 @@ private:
 
     static int callback_rx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->rx_ctx;
+        if (!_this->running) { return 0; }
         volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
         if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
         return 0;
@@ -518,11 +524,9 @@ private:
 
         for (int i = 0; i < noutput_items; ++i) {
             float_buffer[i] *= this->amplitude;
-            std::cout << float_buffer[i] << std::endl;
         }
 
         std::vector<std::complex<float>> modulated_signal(noutput_items);
-
         float sensitivity = modulation_index;
         FrequencyModulator modulator(sensitivity);
         modulator.work(noutput_items, float_buffer, modulated_signal);
@@ -538,7 +542,6 @@ private:
             buffer[2 * i] = real_scaled;
             buffer[2 * i + 1] = imag_scaled;
         }
-
         return 0;
     }
 
@@ -594,9 +597,11 @@ private:
     }
 
     static int callback_tx(hackrf_transfer* transfer) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;        
-        //return _this->apply_modulation((int8_t *)transfer->buffer, transfer->valid_length);
-        return _this->apply_wfm_modulation((int8_t *)transfer->buffer, transfer->valid_length);
+        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
+        if (!_this->running) { return 0; }
+
+        return _this->apply_modulation((int8_t *)transfer->buffer, transfer->valid_length);
+        //return _this->apply_wfm_modulation((int8_t *)transfer->buffer, transfer->valid_length);
     }        
 
     std::string name;

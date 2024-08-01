@@ -1,6 +1,6 @@
 #pragma once
 #include <type_traits>
-#include <string.h>
+#include <iostream>
 #include <vector>
 #include <mutex>
 #include <complex>
@@ -78,43 +78,16 @@ namespace dsp {
             return (readerStop ? -1 : dataSize);
         }
 
-        template <typename U>
-        float convertToFloat(const U& value) {
-            if constexpr (std::is_same_v<U, float>) {
-                return value;
-            } else if constexpr (std::is_arithmetic_v<U>) {
-                return static_cast<float>(value);
-            } else if constexpr (std::is_same_v<U, std::complex<float>>) {
-                return std::abs(value);
-            } else {
-                // For any other types, you might need to add more specific handling
-                return 0.0f;  // Default case, adjust as needed
-            }
-        }
-
-        // Your readBufferToVector method remains the same
         std::vector<float> readBufferToVector() {
             std::vector<float> result;
-            std::unique_lock<std::mutex> lck(rdyMtx);
-            rdyCV.wait(lck, [this] { return (dataReady || readerStop); });
-
-            if (readerStop) {
-                return result;
-            }
-
             result.resize(dataSize);
 
-                   // Convert each element to float
             for (int i = 0; i < dataSize; ++i) {
-                result[i] = convertToFloat(readBuf[i]);
+                auto value = readBuf[i];
+                float convertedValue = value.re;
+                std::cout << "raw value = " << convertedValue << std::endl;
+                result[i] = convertedValue;
             }
-
-            dataReady = false;
-            {
-                std::lock_guard<std::mutex> lck(swapMtx);
-                canSwap = true;
-            }
-            swapCV.notify_all();
             return result;
         }
 
