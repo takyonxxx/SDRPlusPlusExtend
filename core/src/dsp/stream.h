@@ -78,19 +78,6 @@ namespace dsp {
             return (readerStop ? -1 : dataSize);
         }
 
-        std::vector<float> readBufferToVector() {
-            std::vector<float> result;
-            result.resize(dataSize);
-
-            for (int i = 0; i < dataSize; ++i) {
-                auto value = readBuf[i];
-                float convertedValue = value.re;
-                std::cout << "raw value = " << convertedValue << std::endl;
-                result[i] = convertedValue;
-            }
-            return result;
-        }
-
         virtual inline void flush() {
             // Clear data ready
             {

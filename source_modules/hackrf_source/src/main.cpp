@@ -507,18 +507,34 @@ private:
         volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
         if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
         return 0;
-    }  
+    }
+
+    std::vector<float> convertToFloatVector(const std::vector<dsp::complex_t>& complexBuf) {
+        std::vector<float> floatBuf(2 * complexBuf.size()); // Allocate vector with double size
+        for (size_t i = 0; i < complexBuf.size(); ++i) {
+            floatBuf[2 * i]     = complexBuf[i].re;      // Real part
+            floatBuf[2 * i + 1] = complexBuf[i].im;      // Imaginary part
+        }
+        return floatBuf;
+    }
 
     int apply_modulation(int8_t* buffer, uint32_t length) {
 
         int decimation = 1;
         int size = length / 2;
 
-        std::vector<float> float_buffer;
-        while (float_buffer.size() < size) {
-            std::vector<float> additional_data = stream.readBufferToVector();
-            float_buffer.insert(float_buffer.end(), additional_data.begin(), additional_data.end());
+        dsp::complex_t* dsp_buffer = new dsp::complex_t[size];
+        if (stream.read() < 0) {
+            flog::warn("CB killed");
+            delete[] dsp_buffer; // Clean up if needed
+            return 0;
         }
+
+        memcpy(dsp_buffer, stream.readBuf, size * sizeof(dsp::complex_t));
+        stream.flush();
+        std::vector<dsp::complex_t> complex_buffer(dsp_buffer, dsp_buffer + size);
+        std::vector<float> float_buffer = convertToFloatVector(complex_buffer);
+        delete[] dsp_buffer;
 
         int noutput_items = float_buffer.size();
 

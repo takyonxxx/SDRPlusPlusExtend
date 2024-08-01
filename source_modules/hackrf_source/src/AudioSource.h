@@ -104,21 +104,9 @@ private:
     }
 
     static int callback(void* outputBuffer, void* inputBuffer, unsigned int nBufferFrames, double streamTime, RtAudioStreamStatus status, void* userData) {
-        if (status) {
-            std::cerr << "Stream underflow detected!" << std::endl;
-        }
-
         RtAudiSource* _this = static_cast<RtAudiSource*>(userData);
-        dsp::complex_t* buffer = static_cast<dsp::complex_t*>(inputBuffer);
-        size_t validSamples = 0;
-        for (unsigned int i = 0; i < nBufferFrames; ++i) {
-            if (is_nan(buffer[i])) {
-                continue;
-            }
-            _this->stream_buffer.writeBuf[validSamples] = buffer[i];
-            validSamples++;
-        }
-        _this->stream_buffer.swap(validSamples);
+        memcpy(_this->stream_buffer.writeBuf, inputBuffer, nBufferFrames * sizeof(dsp::complex_t));
+        _this->stream_buffer.swap(nBufferFrames);
         return 0;
     }
 
