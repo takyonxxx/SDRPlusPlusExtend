@@ -44,11 +44,15 @@ namespace fs = std::filesystem;
 #define DEBUG 1
 #define BUF_LEN 262144   // hackrf tx buf
 #define BYTES_PER_SAMPLE 2
-#define CARRIER_FREQUENCY 100e6
-#define DEVIATION 75e3
-#define AUDIO_SAMPLE_RATE 44100
+#define FM_CARRIER_FREQUENCY 100e6
+#define AM_CARRIER_FREQUENCY 1e6
+#define AUDIO_SAMPLE_RATE 44800
 
 constexpr double TWO_PI = 6.283185307179586;
+constexpr double FREQUENCY_DEVIATION = 75.0;
+constexpr double SINE_WAVE_FREQUENCY = 440.0;
+constexpr double AM_MOD_INDEX = 0.5;
+constexpr double WFM_MOD_INDEX = 5.0;
 
 #define CONCAT(a, b) ((std::string(a) + b).c_str())
 

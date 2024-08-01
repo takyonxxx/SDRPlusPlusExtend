@@ -161,12 +161,12 @@ namespace dsp {
         void free() {
             if (writeBuf) { buffer::free(writeBuf); }
             if (readBuf) { buffer::free(readBuf); }
-            writeBuf = NULL;
-            readBuf = NULL;
+            writeBuf = nullptr;
+            readBuf = nullptr;
         }
 
-        T* writeBuf;
-        T* readBuf;
+        T* writeBuf = nullptr;
+        T* readBuf = nullptr;
 
     private:
         std::mutex swapMtx;

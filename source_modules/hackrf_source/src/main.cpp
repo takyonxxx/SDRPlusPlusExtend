@@ -539,13 +539,64 @@ private:
         }
 
         return 0;
-    }    
+    }
+
+    int apply_wfm_modulation(int8_t *buffer, size_t length) {
+        static double phase = 0.0;
+        const double modulation_sensitivity = 2.0 * M_PI * FREQUENCY_DEVIATION / sampleRate;
+        const double sine_wave_increment = 2.0 * M_PI * SINE_WAVE_FREQUENCY / sampleRate;
+
+        for (size_t i = 0; i < length; ++i) {
+            double sine_wave_sample = sin(phase);
+            phase += modulation_sensitivity * sine_wave_sample;
+            while (phase >= 2.0 * M_PI) {
+                phase -= 2.0 * M_PI;
+            }
+            while (phase < 0) {
+                phase += 2.0 * M_PI;
+            }
+            double sample = 127.0 * sin(phase);
+            if (sample > 127.0) sample = 127.0;
+            else if (sample < -127.0) sample = -127.0;
+            buffer[i] = static_cast<int8_t>(sample);
+            phase += sine_wave_increment;
+            if (phase >= 2.0 * M_PI) {
+                phase -= 2.0 * M_PI;
+            }
+        }
+        return 0;
+    }
+
+    int apply_am_modulation(int8_t *buffer, size_t length) {
+        static double carrier_phase = 0.0;
+        static double mod_phase = 0.0;
+        const double carrier_phase_increment = 2.0 * M_PI * freq / sampleRate;
+        const double mod_phase_increment = 2.0 * M_PI * SINE_WAVE_FREQUENCY / sampleRate;
+
+        for (size_t i = 0; i < length; ++i) {
+            double carrier = sin(carrier_phase);
+            double modulator = 1.0 + AM_MOD_INDEX * sin(mod_phase);
+            double sample = 127.0 * carrier * modulator;
+            if (sample > 127.0) sample = 127.0;
+            else if (sample < -127.0) sample = -127.0;
+            buffer[i] = static_cast<int8_t>(sample);
+            carrier_phase += carrier_phase_increment;
+            if (carrier_phase >= 2.0 * M_PI) {
+                carrier_phase -= 2.0 * M_PI;
+            }
+            mod_phase += mod_phase_increment;
+            if (mod_phase >= 2.0 * M_PI) {
+                mod_phase -= 2.0 * M_PI;
+            }
+        }
+        return 0;
+    }
 
     static int callback_tx(hackrf_transfer* transfer) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        return 0;
-        return _this->apply_modulation((int8_t *)transfer->buffer, transfer->valid_length);
-    }
+        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;        
+        //return _this->apply_modulation((int8_t *)transfer->buffer, transfer->valid_length);
+        return _this->apply_wfm_modulation((int8_t *)transfer->buffer, transfer->valid_length);
+    }        
 
     std::string name;
     hackrf_device* openDev;
