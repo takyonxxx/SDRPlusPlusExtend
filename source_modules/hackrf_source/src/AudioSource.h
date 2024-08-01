@@ -93,7 +93,7 @@ private:
     int selectedDevice;
 
     static const int SAMPLE_RATE = 44100;
-    static const int FRAMES_PER_BUFFER = 512;
+    static const int FRAMES_PER_BUFFER = 1024;
 
     static bool is_zero(const dsp::complex_t& value) {
         return value.re == 0 && value.im == 0;

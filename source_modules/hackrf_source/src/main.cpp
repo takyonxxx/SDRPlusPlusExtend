@@ -522,25 +522,33 @@ private:
 
         int decimation = 1;
         int size = length / 2;
-
         dsp::complex_t* dsp_buffer = new dsp::complex_t[size];
-        if (stream.read() < 0) {
-            flog::warn("CB killed");
-            delete[] dsp_buffer; // Clean up if needed
-            return 0;
+
+        int total_read = 0;
+        while (total_read < size) {
+            auto s_size = stream.read();
+            if (s_size < 0) {
+                flog::warn("CB killed");
+                delete[] dsp_buffer; // Clean up if needed
+                return 0;
+            }
+
+            int remaining = size - total_read;
+            int to_read = (s_size < remaining) ? s_size : remaining;
+            std::memcpy(&dsp_buffer[total_read], stream.readBuf, to_read * sizeof(dsp::complex_t));
+            total_read += to_read;
+            stream.flush();
         }
 
-        memcpy(dsp_buffer, stream.readBuf, size * sizeof(dsp::complex_t));
-        stream.flush();
         std::vector<dsp::complex_t> complex_buffer(dsp_buffer, dsp_buffer + size);
         std::vector<float> float_buffer = convertToFloatVector(complex_buffer);
-        delete[] dsp_buffer;
 
         int noutput_items = float_buffer.size();
-
         for (int i = 0; i < noutput_items; ++i) {
             float_buffer[i] *= this->amplitude;
         }
+
+        std::cout << float_buffer.size() << std::endl;
 
         std::vector<std::complex<float>> modulated_signal(noutput_items);
         float sensitivity = modulation_index;
@@ -558,6 +566,7 @@ private:
             buffer[2 * i] = real_scaled;
             buffer[2 * i + 1] = imag_scaled;
         }
+
         return 0;
     }
 

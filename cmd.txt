@@ -1,4 +1,5 @@
 cmake ../SDRPlusPlusExtend -DCMAKE_TOOLCHAIN_FILE=C:/Users/MarenCompEng/vcpkg/scripts/buildsystems/vcpkg.cmake -G "Visual Studio 17 2022"
+cmake ../SDRPlusPlusExtend -DCMAKE_TOOLCHAIN_FILE=C:/Users/turka/vcpkg/scripts/buildsystems/vcpkg.cmake -G "Visual Studio 17 2022"
 cmake --build . --target clean
 cmake --build . --config Release
 

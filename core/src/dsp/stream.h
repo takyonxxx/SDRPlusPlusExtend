@@ -128,7 +128,7 @@ namespace dsp {
         T* writeBuf = nullptr;
         T* readBuf = nullptr;
 
-    private:
+    public:
         std::mutex swapMtx;
         std::condition_variable swapCV;
         bool canSwap = true;
