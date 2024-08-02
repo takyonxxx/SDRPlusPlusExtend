@@ -2,6 +2,9 @@
 #include "FrequencyModulator.h"
 #include "RationalResampler.h"
 #include "AudioSource.h"
+#include <algorithm>
+#include <vector>
+#include <cstddef>
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:
@@ -245,9 +248,65 @@ private:
     }
 
     static void start(void* ctx) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;        
+        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
 
-        if (_this->running) { return; }
+        if (_this->rx_running) { return; }
+        if (_this->tx_running) { return; }
+
+        if (_this->selectedSerial == "") {
+            flog::error("Tried to start HackRF source with empty serial");
+            return;
+        }
+
+        hackrf_error err = (hackrf_error)hackrf_open_by_serial(_this->selectedSerial.c_str(), &_this->openDev);
+        if (err != HACKRF_SUCCESS) {
+            flog::error("Could not open HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
+            return;
+        }
+
+        _this->current_tx_sample = 0;       
+        _this->amp = false;
+        _this->biasT = false;
+
+        hackrf_set_sample_rate(_this->openDev, _this->sampleRate);
+        hackrf_set_baseband_filter_bandwidth(_this->openDev, _this->bandwidthIdToBw(_this->bwId));
+        hackrf_set_freq(_this->openDev, _this->freq);
+        hackrf_set_antenna_enable(_this->openDev, _this->biasT);
+        hackrf_set_amp_enable(_this->openDev, _this->amp);
+        hackrf_set_lna_gain(_this->openDev, _this->lna);
+        hackrf_set_vga_gain(_this->openDev, _this->vga);
+        hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
+
+        hackrf_start_rx(_this->openDev, callback_rx, _this);
+
+        _this->rx_running = true;
+        flog::info("HackRFSourceModule '{0}': Started Rx Mode!", _this->name);
+    }
+
+    static void stop(void* ctx) {
+        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
+        hackrf_error err;
+
+        if (!_this->rx_running) { return; }
+        if (!_this->tx_running) { return; }
+        _this->stream.stopWriter();
+
+        hackrf_stop_rx(_this->openDev);      
+
+        err = (hackrf_error)hackrf_close(_this->openDev);
+        if (err != HACKRF_SUCCESS) {
+            flog::error("Could not close HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
+        }
+
+        _this->stream.clearWriteStop();
+        _this->rx_running = false;
+
+        flog::info("HackRFSourceModule '{0}': Stopped Rx Mode!", _this->name);
+    }
+
+    static void start_ptt(void* ctx) {
+        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
+        if (_this->tx_running) { return; }
 
         if (_this->selectedSerial == "") {
             flog::error("Tried to start HackRF source with empty serial");
@@ -261,17 +320,9 @@ private:
         }
 
         _this->current_tx_sample = 0;
-        if(_this->ptt)
-        {
-            _this->biasT = true;
-            _this->amp = true;
-            _this->startRecording();
-        }
-        else
-        {
-            _this->amp = false;
-            _this->biasT = false;
-        }
+        _this->biasT = true;
+        _this->amp = true;
+        _this->startRecording();
 
         hackrf_set_sample_rate(_this->openDev, _this->sampleRate);
         hackrf_set_baseband_filter_bandwidth(_this->openDev, _this->bandwidthIdToBw(_this->bwId));
@@ -281,33 +332,21 @@ private:
         hackrf_set_lna_gain(_this->openDev, _this->lna);
         hackrf_set_vga_gain(_this->openDev, _this->vga);
         hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
-
-        if(_this->ptt)
-        {
-            hackrf_set_baseband_filter_bandwidth(_this->openDev,  _this->sampleRate*0.75);
-            hackrf_start_tx(_this->openDev, callback_tx, _this);
-        }
-        else
-            hackrf_start_rx(_this->openDev, callback_rx, _this);
-
-        _this->running = true;
-        flog::info("HackRFSourceModule '{0} {1}': Start!", _this->name, _this->ptt);
+        hackrf_set_baseband_filter_bandwidth(_this->openDev,  _this->sampleRate*0.75);
+        hackrf_start_tx(_this->openDev, callback_tx, _this);
+        _this->tx_running = true;
+        flog::info("HackRFSourceModule '{0} {1}': Start Tx Mode!", _this->name, _this->ptt);
     }
 
-    static void stop(void* ctx) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
-        hackrf_error err;
+    static void stop_ptt(void* ctx) {
+        HackRFSourceModule* _this = (HackRFSourceModule*)ctx;        
+        if (!_this->tx_running) { return; }
 
-        if (!_this->running) { return; }        
+        hackrf_error err;
         _this->stream.stopWriter();
 
-        if(_this->ptt)
-        {
-            hackrf_stop_tx(_this->openDev);
-            _this->stopRecording();
-        }
-
-        hackrf_stop_rx(_this->openDev);
+        hackrf_stop_tx(_this->openDev);
+        _this->stopRecording();
 
         err = (hackrf_error)hackrf_reset(_this->openDev);
         if (err != HACKRF_SUCCESS) {
@@ -322,14 +361,14 @@ private:
         }
 
         _this->stream.clearWriteStop();
-        _this->running = false;
+        _this->tx_running = false;
 
-        flog::info("HackRFSourceModule '{0}': Stop!", _this->name);
+        flog::info("HackRFSourceModule '{0}': Stop Tx Mode!", _this->name);
     }
 
     static void tune(double freq, void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
-        if (_this->running) {
+        if (_this->rx_running || _this->tx_running) {
             hackrf_set_freq(_this->openDev, freq);
         }
         _this->freq = freq;
@@ -364,7 +403,7 @@ private:
     static void menuHandler(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
 
-        if (_this->running) { SmGui::BeginDisabled(); }
+        if (_this->rx_running || _this->tx_running) { SmGui::BeginDisabled(); }
         SmGui::FillWidth();
         SmGui::ForceSync();
         if (SmGui::Combo(CONCAT("##_hackrf_dev_sel_", _this->name), &_this->devId, _this->devListTxt.c_str())) {
@@ -391,12 +430,12 @@ private:
             core::setInputSampleRate(_this->sampleRate);
         }
 
-        if (_this->running) { SmGui::EndDisabled(); }
+        if (_this->rx_running || _this->tx_running) { SmGui::EndDisabled(); }
 
         SmGui::LeftLabel("Bandwidth");
         SmGui::FillWidth();
         if (SmGui::Combo(CONCAT("##_hackrf_bw_sel_", _this->name), &_this->bwId, bandwidthsTxt)) {
-            if (_this->running) {
+            if (_this->rx_running || _this->tx_running) {
                 hackrf_set_baseband_filter_bandwidth(_this->openDev, _this->bandwidthIdToBw(_this->bwId));
             }
             config.acquire();
@@ -407,7 +446,7 @@ private:
         SmGui::LeftLabel("LNA Gain");
         SmGui::FillWidth();
         if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_lna_", _this->name), &_this->lna, 0, 40, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
-            if (_this->running) {
+            if (_this->rx_running) {
                 hackrf_set_lna_gain(_this->openDev, _this->lna);
             }
             config.acquire();
@@ -418,7 +457,7 @@ private:
         SmGui::LeftLabel("VGA Gain");
         SmGui::FillWidth();
         if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_vga_", _this->name), &_this->vga, 0, 62, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
-            if (_this->running) {
+            if (_this->rx_running) {
                 hackrf_set_vga_gain(_this->openDev, _this->vga);
             }
             config.acquire();
@@ -427,7 +466,7 @@ private:
         }
 
         if (SmGui::Checkbox(CONCAT("Bias-T##_hackrf_bt_", _this->name), &_this->biasT)) {
-            if (_this->running) {
+            if (_this->rx_running || _this->tx_running) {
                 hackrf_set_antenna_enable(_this->openDev, _this->biasT);
             }
             config.acquire();
@@ -436,7 +475,7 @@ private:
         }
 
         if (SmGui::Checkbox(CONCAT("Amp Enabled##_hackrf_amp_", _this->name), &_this->amp)) {
-            if (_this->running) {
+            if (_this->rx_running || _this->tx_running) {
                 hackrf_set_amp_enable(_this->openDev, _this->amp);
             }
             config.acquire();
@@ -444,13 +483,8 @@ private:
             config.release(true);
         }
 
-        if (SmGui::Checkbox(CONCAT("Ptt Enabled##_hackrf_ptt_", _this->name), &_this->ptt)) {
-
-            if (_this->running) {
-                _this->stop(ctx);
-            }
-            _this->stream.flush();
-            _this->start(ctx);
+        if (SmGui::Checkbox(CONCAT("Ptt Enabled##_hackrf_ptt_", _this->name), &_this->ptt)) {            
+            _this->start_ptt(ctx);
             flog::info("HackRFSourceModule '{0}': Ptt Enabled! Value: {1}", _this->name, _this->ptt);
             config.acquire();
             config.conf["devices"][_this->selectedSerial]["ptt"] = _this->ptt;
@@ -460,7 +494,7 @@ private:
         SmGui::LeftLabel("Tx VGA Gain");
         SmGui::FillWidth();
         if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_vga_", _this->name), &_this->tx_vga, 0, 47, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
-            if (_this->running) {
+            if (_this->tx_running) {
                 hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
             }
             config.acquire();
@@ -503,7 +537,7 @@ private:
 
     static int callback_rx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->rx_ctx;
-        if (!_this->running) { return 0; }
+        if (!_this->rx_running) { return 0; }
         volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
         if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
         return 0;
@@ -518,25 +552,25 @@ private:
         return floatBuf;
     }
 
-    std::vector<float> readStreamToSize(size_t size) {
+    std::vector<float> readStreamToSize(size_t size, std::chrono::milliseconds timeout) {
         std::vector<float> float_buffer;
         float_buffer.reserve(size);
+        auto start_time = std::chrono::steady_clock::now();
 
-        while (float_buffer.size() < size)
-        {
+        while (float_buffer.size() < size) {
             int len = stream.read();
             if (len < 0) {
                 break;
             }
             std::vector<float> temp_buffer = stream.readBufferToVector();
-
             size_t elements_needed = size - float_buffer.size();
-            size_t elements_to_add = elements_needed;
-            if (temp_buffer.size() < elements_needed) {
-                elements_to_add = temp_buffer.size();
-            }
+            size_t elements_to_add = (elements_needed < temp_buffer.size()) ? elements_needed : temp_buffer.size();
             float_buffer.insert(float_buffer.end(), temp_buffer.begin(), temp_buffer.begin() + elements_to_add);
             stream.flush();
+            if (std::chrono::steady_clock::now() - start_time > timeout) {
+                std::cerr << "Timeout reached while reading stream" << std::endl;
+                break;
+            }
         }
         return float_buffer;
     }
@@ -545,7 +579,9 @@ private:
 
         int decimation = 1;
         size_t desired_size = length / sizeof(float);
-        std::vector<float> float_buffer = readStreamToSize(desired_size);
+        auto timeout_ms = std::chrono::milliseconds(static_cast<long long>(1000.0 * desired_size / AUDIO_SAMPLE_RATE));
+        timeout_ms += std::chrono::milliseconds(50);
+        std::vector<float> float_buffer = readStreamToSize(desired_size, timeout_ms);
 
         if (float_buffer.size() < desired_size) {
             return 0;
@@ -567,12 +603,8 @@ private:
         std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
 
         for (int i = 0; i < noutput_items; ++i) {
-            float real_part = std::real(resampled_signal[i]);
-            float imag_part = std::imag(resampled_signal[i]);
-            int8_t real_scaled = static_cast<int8_t>(real_part * 127.0f);
-            int8_t imag_scaled = static_cast<int8_t>(imag_part * 127.0f);
-            buffer[2 * i] = real_scaled;
-            buffer[2 * i + 1] = imag_scaled;
+            buffer[2 * i] = static_cast<int8_t>(std::real(resampled_signal[i]) * 127.0f);
+            buffer[2 * i + 1] = static_cast<int8_t>(std::imag(resampled_signal[i]) * 127.0f);
         }
 
         return 0;
@@ -631,7 +663,7 @@ private:
 
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        if (!_this->running) { return 0; }
+        if (!_this->tx_running) { return 0; }
 
         return _this->apply_modulation((int8_t *)transfer->buffer, transfer->valid_length);
         //return _this->apply_wfm_modulation((int8_t *)transfer->buffer, transfer->valid_length);
@@ -643,7 +675,8 @@ private:
     dsp::stream<dsp::complex_t> stream;
     int sampleRate;
     SourceManager::SourceHandler handler;
-    bool running = false;
+    bool rx_running = false;
+    bool tx_running = false;
     double freq;
     std::string selectedSerial = "";
     int devId = 0;

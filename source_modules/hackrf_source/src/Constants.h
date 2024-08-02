@@ -46,7 +46,7 @@ namespace fs = std::filesystem;
 #define BYTES_PER_SAMPLE 2
 #define FM_CARRIER_FREQUENCY 100e6
 #define AM_CARRIER_FREQUENCY 1e6
-#define AUDIO_SAMPLE_RATE 44800
+#define AUDIO_SAMPLE_RATE 44100
 
 constexpr double TWO_PI = 6.283185307179586;
 constexpr double FREQUENCY_DEVIATION = 75.0;
