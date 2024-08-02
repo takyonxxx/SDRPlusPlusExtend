@@ -1,6 +1,5 @@
 #pragma once
 #include <type_traits>
-#include <iostream>
 #include <vector>
 #include <mutex>
 #include <complex>
@@ -68,6 +67,31 @@ namespace dsp {
             rdyCV.notify_all();
 
             return true;
+        }
+
+        std::vector<float> readBufferToVector() {
+            std::vector<float> result;
+            if (dataSize <= 0 || readBuf == nullptr) {
+                return result;
+            }
+
+            if constexpr (std::is_same_v<T, float>) {
+                result.assign(readBuf, readBuf + dataSize);
+            }
+            else if constexpr (std::is_same_v<T, std::complex<float>>) {
+                result.reserve(dataSize * 2);
+                for (int i = 0; i < dataSize; ++i) {
+                    result.push_back(readBuf[i].re);
+                    result.push_back(readBuf[i].im);
+                }
+            }
+            else if constexpr (std::is_arithmetic_v<T>) {
+                result.reserve(dataSize);
+                for (size_t i = 0; i < dataSize; ++i) {
+                    result.push_back(static_cast<float>(readBuf[i]));
+                }
+            }
+            return result;
         }
 
         virtual inline int read() {

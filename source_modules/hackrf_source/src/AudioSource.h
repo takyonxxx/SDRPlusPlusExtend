@@ -3,7 +3,8 @@
 #include <iostream>
 #include <RtAudio.h>
 #include <signal_path/signal_path.h>
-#include <stdexcept>
+#include <cstring>
+#include <complex>
 
 class RtAudiSource {
 public:

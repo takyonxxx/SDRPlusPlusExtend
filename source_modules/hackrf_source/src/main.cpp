@@ -518,30 +518,38 @@ private:
         return floatBuf;
     }
 
+    std::vector<float> readStreamToSize(size_t size) {
+        std::vector<float> float_buffer;
+        float_buffer.reserve(size);
+
+        while (float_buffer.size() < size)
+        {
+            int len = stream.read();
+            if (len < 0) {
+                break;
+            }
+            std::vector<float> temp_buffer = stream.readBufferToVector();
+
+            size_t elements_needed = size - float_buffer.size();
+            size_t elements_to_add = elements_needed;
+            if (temp_buffer.size() < elements_needed) {
+                elements_to_add = temp_buffer.size();
+            }
+            float_buffer.insert(float_buffer.end(), temp_buffer.begin(), temp_buffer.begin() + elements_to_add);
+            stream.flush();
+        }
+        return float_buffer;
+    }
+
     int apply_modulation(int8_t* buffer, uint32_t length) {
 
         int decimation = 1;
-        int size = length / 2;
-        dsp::complex_t* dsp_buffer = new dsp::complex_t[size];
+        size_t desired_size = length / sizeof(float);
+        std::vector<float> float_buffer = readStreamToSize(desired_size);
 
-        int total_read = 0;
-        while (total_read < size) {
-            auto s_size = stream.read();
-            if (s_size < 0) {
-                flog::warn("CB killed");
-                delete[] dsp_buffer; // Clean up if needed
-                return 0;
-            }
-
-            int remaining = size - total_read;
-            int to_read = (s_size < remaining) ? s_size : remaining;
-            std::memcpy(&dsp_buffer[total_read], stream.readBuf, to_read * sizeof(dsp::complex_t));
-            total_read += to_read;
-            stream.flush();
+        if (float_buffer.size() < desired_size) {
+            return 0;
         }
-
-        std::vector<dsp::complex_t> complex_buffer(dsp_buffer, dsp_buffer + size);
-        std::vector<float> float_buffer = convertToFloatVector(complex_buffer);
 
         int noutput_items = float_buffer.size();
         for (int i = 0; i < noutput_items; ++i) {
