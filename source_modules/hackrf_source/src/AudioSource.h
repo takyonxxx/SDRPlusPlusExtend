@@ -4,7 +4,6 @@
 #include <RtAudio.h>
 #include <signal_path/signal_path.h>
 #include <cstring>
-#include <complex>
 
 class RtAudiSource {
 public:
@@ -16,15 +15,13 @@ public:
         }
 
         RtAudio::DeviceInfo info;
-
 #if RTAUDIO_VERSION_MAJOR >= 6
                 for (int i : audio.getDeviceIds()) {
 #else
                 int count = audio.getDeviceCount();
                 for (int i = 0; i < count; i++) {
 #endif
-            try {
-                // Get info
+            try {               
                 info = audio.getDeviceInfo(i);
 #if !defined(RTAUDIO_VERSION_MAJOR) || RTAUDIO_VERSION_MAJOR < 6
                 if (!info.probed) { continue; }
@@ -108,7 +105,7 @@ private:
     int selectedDevice;
 
     static const int SAMPLE_RATE = 44100;
-    static const int FRAMES_PER_BUFFER = 1024;
+    static const int FRAMES_PER_BUFFER = 4096;
 
     static bool is_zero(const dsp::complex_t& value) {
         return value.re == 0 && value.im == 0;
