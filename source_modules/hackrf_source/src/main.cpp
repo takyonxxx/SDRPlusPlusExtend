@@ -152,7 +152,7 @@ public:
         bool created = false;
         config.acquire();
         if (!config.conf["devices"].contains(serial)) {
-            config.conf["devices"][serial]["sampleRate"] = 2000000;
+            config.conf["devices"][serial]["sampleRate"] = 20000000;
             config.conf["devices"][serial]["biasT"] = false;
             config.conf["devices"][serial]["amp"] = false;
             config.conf["devices"][serial]["ptt"] = false;
@@ -169,7 +169,7 @@ public:
 
         // Set default values
         srId = 0;
-        sampleRate = 2000000;
+        sampleRate = 20000000;
         biasT = false;
         amp = false;
         ptt = false;
@@ -251,7 +251,6 @@ private:
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
 
         if (_this->rx_running) { return; }
-        if (_this->tx_running) { return; }
 
         if (_this->selectedSerial == "") {
             flog::error("Tried to start HackRF source with empty serial");
@@ -264,7 +263,6 @@ private:
             return;
         }
 
-        _this->current_tx_sample = 0;       
         _this->amp = false;
         _this->biasT = false;
 
@@ -275,7 +273,6 @@ private:
         hackrf_set_amp_enable(_this->openDev, _this->amp);
         hackrf_set_lna_gain(_this->openDev, _this->lna);
         hackrf_set_vga_gain(_this->openDev, _this->vga);
-        hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
 
         hackrf_start_rx(_this->openDev, callback_rx, _this);
 
@@ -484,7 +481,7 @@ private:
         }
 
         if (SmGui::Checkbox(CONCAT("Ptt Enabled##_hackrf_ptt_", _this->name), &_this->ptt)) {            
-            _this->start_ptt(ctx);
+            //_this->start_ptt(ctx);
             flog::info("HackRFSourceModule '{0}': Ptt Enabled! Value: {1}", _this->name, _this->ptt);
             config.acquire();
             config.conf["devices"][_this->selectedSerial]["ptt"] = _this->ptt;

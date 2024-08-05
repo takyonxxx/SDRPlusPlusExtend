@@ -17,10 +17,18 @@ public:
 
         RtAudio::DeviceInfo info;
 
-        for (int i : audio.getDeviceIds()) {
+#if RTAUDIO_VERSION_MAJOR >= 6
+                for (int i : audio.getDeviceIds()) {
+#else
+                int count = audio.getDeviceCount();
+                for (int i = 0; i < count; i++) {
+#endif
             try {
                 // Get info
                 info = audio.getDeviceInfo(i);
+#if !defined(RTAUDIO_VERSION_MAJOR) || RTAUDIO_VERSION_MAJOR < 6
+                if (!info.probed) { continue; }
+#endif
                 std::cerr << "Mic device " << info.name << std::endl;
                 //if (info.inputChannels < 2) { continue; }
                 if (info.name.find("Microphone") != std::string::npos) {
@@ -33,8 +41,9 @@ public:
                 flog::error("Error getting audio device ({}) info: {}", i, e.what());
             }
         }
-
+#if RTAUDIO_VERSION_MAJOR >= 6
         audio.setErrorCallback(&RtAudiSource::errorCallback);
+#endif
         RtAudio::StreamParameters parameters;
         parameters.deviceId = selectedDevice;
         parameters.nChannels = info.inputChannels;
@@ -47,8 +56,13 @@ public:
         try {
             audio.openStream(nullptr, &parameters, RTAUDIO_FLOAT32, sampleRate, &bufferFrames, &RtAudiSource::callback, this, &opts);
             std::cout << "Stream opened successfully with device " << selectedDevice << std::endl;
-        } catch (const RtAudioErrorType& error) {
-            std::cerr << "Error opening stream: " << audio.getErrorText() << std::endl;
+#if RTAUDIO_VERSION_MAJOR >= 6
+            } catch (const RtAudioErrorType& error) {
+                std::cerr << "Error opening stream: " << audio.getErrorText() << std::endl;
+#else
+            } catch (const RtAudioError& error) {
+                std::cerr << "Error opening stream: " << error.what() << std::endl;
+#endif
         }
     }
 
