@@ -118,6 +118,7 @@ namespace SmGui {
     // Widget functions
     bool Combo(const char *label, int *current_item, const char *items_separated_by_zeros, int popup_max_height_in_items = -1);
     bool Button(const char *label, ImVec2 size = ImVec2(0, 0));
+    bool CustomButton(const char *label, ImVec2 size = ImVec2(0, 0), bool isActive = false);
     void Columns(int count = 1, const char *id = (const char *)0, bool border = true);
     void NextColumn();
     bool RadioButton(const char *label, bool active);

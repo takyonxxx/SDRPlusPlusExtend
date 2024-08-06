@@ -181,54 +181,54 @@ namespace sourcemenu {
 
         sigpath::sourceManager.showSelectedMenu();
 
-        if (ImGui::Checkbox("IQ Correction##_sdrpp_iq_corr", &iqCorrection)) {
-            sigpath::iqFrontEnd.setDCBlocking(iqCorrection);
-            core::configManager.acquire();
-            core::configManager.conf["iqCorrection"] = iqCorrection;
-            core::configManager.release(true);
-        }
+        // if (ImGui::Checkbox("IQ Correction##_sdrpp_iq_corr", &iqCorrection)) {
+        //     sigpath::iqFrontEnd.setDCBlocking(iqCorrection);
+        //     core::configManager.acquire();
+        //     core::configManager.conf["iqCorrection"] = iqCorrection;
+        //     core::configManager.release(true);
+        // }
 
-        if (ImGui::Checkbox("Invert IQ##_sdrpp_inv_iq", &invertIQ)) {
-            sigpath::iqFrontEnd.setInvertIQ(invertIQ);
-            core::configManager.acquire();
-            core::configManager.conf["invertIQ"] = invertIQ;
-            core::configManager.release(true);
-        }
+        // if (ImGui::Checkbox("Invert IQ##_sdrpp_inv_iq", &invertIQ)) {
+        //     sigpath::iqFrontEnd.setInvertIQ(invertIQ);
+        //     core::configManager.acquire();
+        //     core::configManager.conf["invertIQ"] = invertIQ;
+        //     core::configManager.release(true);
+        // }
 
-        ImGui::LeftLabel("Offset mode");
-        ImGui::SetNextItemWidth(itemWidth - ImGui::GetCursorPosX());
-        if (ImGui::Combo("##_sdrpp_offset_mode", &offsetMode, offsetModesTxt)) {
-            updateOffset();
-            core::configManager.acquire();
-            core::configManager.conf["offsetMode"] = offsetMode;
-            core::configManager.release(true);
-        }
+        // ImGui::LeftLabel("Offset mode");
+        // ImGui::SetNextItemWidth(itemWidth - ImGui::GetCursorPosX());
+        // if (ImGui::Combo("##_sdrpp_offset_mode", &offsetMode, offsetModesTxt)) {
+        //     updateOffset();
+        //     core::configManager.acquire();
+        //     core::configManager.conf["offsetMode"] = offsetMode;
+        //     core::configManager.release(true);
+        // }
 
-        ImGui::LeftLabel("Offset");
-        ImGui::SetNextItemWidth(itemWidth - ImGui::GetCursorPosX());
-        if (offsetMode == OFFSET_MODE_CUSTOM) {
-            if (ImGui::InputDouble("##freq_offset", &customOffset, 1.0, 100.0)) {
-                updateOffset();
-                core::configManager.acquire();
-                core::configManager.conf["offset"] = customOffset;
-                core::configManager.release(true);
-            }
-        }
-        else {
-            style::beginDisabled();
-            ImGui::InputDouble("##freq_offset", &effectiveOffset, 1.0, 100.0);
-            style::endDisabled();
-        }
+        // ImGui::LeftLabel("Offset");
+        // ImGui::SetNextItemWidth(itemWidth - ImGui::GetCursorPosX());
+        // if (offsetMode == OFFSET_MODE_CUSTOM) {
+        //     if (ImGui::InputDouble("##freq_offset", &customOffset, 1.0, 100.0)) {
+        //         updateOffset();
+        //         core::configManager.acquire();
+        //         core::configManager.conf["offset"] = customOffset;
+        //         core::configManager.release(true);
+        //     }
+        // }
+        // else {
+        //     style::beginDisabled();
+        //     ImGui::InputDouble("##freq_offset", &effectiveOffset, 1.0, 100.0);
+        //     style::endDisabled();
+        // }
 
-        if (running) { style::beginDisabled(); }
-        ImGui::LeftLabel("Decimation");
-        ImGui::SetNextItemWidth(itemWidth - ImGui::GetCursorPosX());
-        if (ImGui::Combo("##source_decim", &decimationPower, decimationStages)) {
-            sigpath::iqFrontEnd.setDecimation(1 << decimationPower);
-            core::configManager.acquire();
-            core::configManager.conf["decimationPower"] = decimationPower;
-            core::configManager.release(true);
-        }
-        if (running) { style::endDisabled(); }
+        // if (running) { style::beginDisabled(); }
+        // ImGui::LeftLabel("Decimation");
+        // ImGui::SetNextItemWidth(itemWidth - ImGui::GetCursorPosX());
+        // if (ImGui::Combo("##source_decim", &decimationPower, decimationStages)) {
+        //     sigpath::iqFrontEnd.setDecimation(1 << decimationPower);
+        //     core::configManager.acquire();
+        //     core::configManager.conf["decimationPower"] = decimationPower;
+        //     core::configManager.release(true);
+        // }
+        // if (running) { style::endDisabled(); }
     }
 }

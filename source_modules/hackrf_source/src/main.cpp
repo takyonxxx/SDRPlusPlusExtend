@@ -10,7 +10,7 @@ class HackRFSourceModule : public ModuleManager::Instance {
 public:
 
     HackRFSourceModule(std::string name):
-        name(name)
+                                           name(name)
     {
         this->name = name;
 
@@ -97,17 +97,16 @@ public:
     void refresh() {
 
         devList.clear();
-        devListTxt = "";        
+        devListTxt = "";
 
 #ifndef __ANDROID__
-        uint64_t serials[256];
         hackrf_device_list_t* _devList = hackrf_device_list();
 
         for (int i = 0; i < _devList->devicecount; i++) {
             // Skip devices that are in use
             if (_devList->serial_numbers[i] == NULL) { continue; }
 
-            // Save the device serial number
+                   // Save the device serial number
             devList.push_back(_devList->serial_numbers[i]);
             devListTxt += (char*)(_devList->serial_numbers[i] + 16);
             devListTxt += '\0';
@@ -157,14 +156,13 @@ public:
             config.conf["devices"][serial]["vgaGain"] = 40;
             config.conf["devices"][serial]["txVgaGain"] = 47;
             config.conf["devices"][serial]["bandwidth"] = 16;
-            config.conf["devices"][serial]["amplitude"] = 5.0;
+            config.conf["devices"][serial]["amplitude"] = 2.0;
             config.conf["devices"][serial]["filter_size"] = 0.0;
             config.conf["devices"][serial]["modulation_index"] = 5.0;
             config.conf["devices"][serial]["interpolation"] = 48;
         }
         config.release(created);
 
-        // Set default values
         srId = 0;
         sampleRate = 20000000;
         biasT = false;
@@ -179,7 +177,6 @@ public:
         interpolation = 48;
         bwId = 1;
 
-        // Load from config if available and validate
         if (config.conf["devices"][serial].contains("sampleRate")) {
             int psr = config.conf["devices"][serial]["sampleRate"];
             for (int i = 0; i < 8; i++) {
@@ -299,12 +296,14 @@ private:
 
         if (_this->selectedSerial == "") {
             flog::error("Tried to start HackRF source with empty serial");
+            _this->ptt = false;
             return;
         }
 
         hackrf_error err = (hackrf_error)hackrf_open_by_serial(_this->selectedSerial.c_str(), &_this->openDev);
         if (err != HACKRF_SUCCESS) {
             flog::error("Could not open HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
+            _this->ptt = false;
             return;
         }
 
@@ -348,6 +347,7 @@ private:
         _this->stream.stopWriter();
         _this->stream.clearWriteStop();
         _this->tx_running = false;
+        _this->ptt = false;
         _this->start(ctx);
 
         flog::info("HackRFSourceModule '{0}': Stop Tx Mode!", _this->name);
@@ -381,7 +381,7 @@ private:
         stream << std::fixed << std::setprecision(1) << display_freq; // Set precision for one decimal place
         std::string display_freq_str = stream.str();
 
-        // Append unit
+               // Append unit
         display_freq_str += " " + unit;
 
         flog::info("HackRFSourceModule '{0}': Tune: {1}!", _this->name, display_freq_str);
@@ -430,28 +430,6 @@ private:
             config.release(true);
         }
 
-        SmGui::LeftLabel("LNA Gain");
-        SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_lna_", _this->name), &_this->lna, 0, 40, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
-            if (_this->rx_running) {
-                hackrf_set_lna_gain(_this->openDev, _this->lna);
-            }
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["lnaGain"] = (int)_this->lna;
-            config.release(true);
-        }
-
-        SmGui::LeftLabel("VGA Gain");
-        SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_vga_", _this->name), &_this->vga, 0, 62, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
-            if (_this->rx_running) {
-                hackrf_set_vga_gain(_this->openDev, _this->vga);
-            }
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["vgaGain"] = (int)_this->vga;
-            config.release(true);
-        }
-
         if (SmGui::Checkbox(CONCAT("Bias-T##_hackrf_bt_", _this->name), &_this->biasT)) {
             if (_this->rx_running || _this->tx_running) {
                 hackrf_set_antenna_enable(_this->openDev, _this->biasT);
@@ -470,60 +448,86 @@ private:
             config.release(true);
         }
 
-        if (SmGui::Checkbox(CONCAT("Ptt Enabled##_hackrf_ptt_", _this->name), &_this->ptt)) {
+        if (!_this->ptt) {
 
+            SmGui::LeftLabel("LNA Gain");
+            SmGui::FillWidth();
+            if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_lna_", _this->name), &_this->lna, 0, 40, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
+                if (_this->rx_running) {
+                    hackrf_set_lna_gain(_this->openDev, _this->lna);
+                }
+                config.acquire();
+                config.conf["devices"][_this->selectedSerial]["lnaGain"] = (int)_this->lna;
+                config.release(true);
+            }
+
+
+            SmGui::LeftLabel("VGA Gain");
+            SmGui::FillWidth();
+            if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_vga_", _this->name), &_this->vga, 0, 62, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
+                if (_this->rx_running) {
+                    hackrf_set_vga_gain(_this->openDev, _this->vga);
+                }
+                config.acquire();
+                config.conf["devices"][_this->selectedSerial]["vgaGain"] = (int)_this->vga;
+                config.release(true);
+            }
+        }
+
+        if (_this->ptt)
+        {
+            SmGui::LeftLabel("Tx VGA Gain");
+            SmGui::FillWidth();
+            if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_vga_", _this->name), &_this->tx_vga, 0, 47, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
+                if (_this->tx_running) {
+                    hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
+                }
+                config.acquire();
+                config.conf["devices"][_this->selectedSerial]["txVgaGain"] = (int)_this->tx_vga;
+                config.release(true);
+            }
+
+            SmGui::LeftLabel("Mic Gain");
+            SmGui::FillWidth();
+            if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_mic_gain_", _this->name), &_this->amplitude, 0.1, 10.0, 0.1, SmGui::FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
+                config.acquire();
+                config.conf["devices"][_this->selectedSerial]["amplitude"] = (float)_this->amplitude;
+                config.release(true);
+            }
+
+            SmGui::LeftLabel("Sensitivity");
+            SmGui::FillWidth();
+            if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_sensitivity_", _this->name), &_this->modulation_index, 0.1, 10.0, 0.1, SmGui:: FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
+                config.acquire();
+                config.conf["devices"][_this->selectedSerial]["modulation_index"] = (float)_this->modulation_index;
+                config.release(true);
+            }
+
+            SmGui::LeftLabel("Filter Size");
+            SmGui::FillWidth();
+            if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_filter_size_", _this->name), &_this->filter_size, 0.0, 2.0, 0.2, SmGui:: FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
+                config.acquire();
+                config.conf["devices"][_this->selectedSerial]["filter_size"] = (float)_this->filter_size;
+                config.release(true);
+            }
+
+            SmGui::LeftLabel("Interpolation");
+            SmGui::FillWidth();
+            if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_interpolation_", _this->name), &_this->interpolation, 0, 200, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
+                config.acquire();
+                config.conf["devices"][_this->selectedSerial]["interpolation"] = (float)_this->interpolation;
+                config.release(true);
+            }
+        }
+
+        std::string buttonId = (_this->ptt ? "Ptt On ##_rtlsdr_refr_" : "Ptt Off ##_rtlsdr_refr_") + _this->name;
+        if (SmGui::CustomButton(buttonId.c_str(), ImVec2(0, 0), _this->ptt)) {
+            _this->ptt = !_this->ptt;
             if (_this->tx_running)
                 _this->stop_ptt(ctx);
             else if(!_this->tx_running)
                 _this->start_ptt(ctx);
-
-            // config.acquire();
-            // config.conf["devices"][_this->selectedSerial]["ptt"] = _this->ptt;
-            // config.release(true);
         }
-
-        SmGui::LeftLabel("Tx VGA Gain");
-        SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_vga_", _this->name), &_this->tx_vga, 0, 47, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
-            if (_this->tx_running) {
-                hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
-            }
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["txVgaGain"] = (int)_this->tx_vga;
-            config.release(true);
-        }
-
-        SmGui::LeftLabel("Mic Gain");
-        SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_mic_gain_", _this->name), &_this->amplitude, 0.1, 10.0, 0.1, SmGui::FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["amplitude"] = (float)_this->amplitude;
-            config.release(true);
-        }
-
-        SmGui::LeftLabel("Sensitivity");
-        SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_sensitivity_", _this->name), &_this->modulation_index, 0.1, 10.0, 0.1, SmGui:: FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["modulation_index"] = (float)_this->modulation_index;
-            config.release(true);
-        }
-
-        SmGui::LeftLabel("Filter Size");
-        SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_tx_filter_size_", _this->name), &_this->filter_size, 0.0, 2.0, 0.2, SmGui:: FMT_STR_FLOAT_DB_ONE_DECIMAL)) {
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["filter_size"] = (float)_this->filter_size;
-            config.release(true);
-        }
-
-        SmGui::LeftLabel("Interpolation");
-        SmGui::FillWidth();
-        if (SmGui::SliderFloatWithSteps(CONCAT("##_hackrf_interpolation_", _this->name), &_this->interpolation, 0, 200, 1, SmGui::FMT_STR_FLOAT_DB_NO_DECIMAL)) {
-            config.acquire();
-            config.conf["devices"][_this->selectedSerial]["interpolation"] = (float)_this->interpolation;
-            config.release(true);
-        }      
     }       
 
     static int callback_rx(hackrf_transfer* transfer) {

@@ -522,6 +522,43 @@ namespace SmGui {
         return (diffId == label);
     }
 
+    bool CustomButton(const char *label, ImVec2 size, bool isActive) {
+        if (!serverMode) {
+            size.x = ImGui::GetContentRegionAvail().x;
+
+            ImGuiStyle& style = ImGui::GetStyle();
+            ImVec2 oldButtonTextAlign = style.ButtonTextAlign;
+            ImVec4 oldButtonColor = style.Colors[ImGuiCol_Button];
+            ImVec4 oldButtonHoveredColor = style.Colors[ImGuiCol_ButtonHovered];
+            ImVec4 oldButtonActiveColor = style.Colors[ImGuiCol_ButtonActive];
+
+            style.ButtonTextAlign = ImVec2(0.5f, 0.5f);
+
+            if (isActive) {
+                style.Colors[ImGuiCol_Button] = ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
+                style.Colors[ImGuiCol_ButtonHovered] = ImVec4(1.0f, 0.2f, 0.2f, 1.0f);
+                style.Colors[ImGuiCol_ButtonActive] = ImVec4(0.6f, 0.0f, 0.0f, 1.0f);
+            }
+
+            bool clicked = ImGui::Button(label, size);
+
+            style.ButtonTextAlign = oldButtonTextAlign;
+            style.Colors[ImGuiCol_Button] = oldButtonColor;
+            style.Colors[ImGuiCol_ButtonHovered] = oldButtonHoveredColor;
+            style.Colors[ImGuiCol_ButtonActive] = oldButtonActiveColor;
+
+            return clicked;
+        }
+        if (rdl) {
+            rdl->pushStep(DRAW_STEP_BUTTON, forceSyncForNext);
+            rdl->pushString(label);
+            rdl->pushFloat(size.x);
+            rdl->pushFloat(size.y);
+            forceSyncForNext = false;
+        }
+        return (diffId == label);
+    }
+
     void Columns(int count, const char *id, bool border) {
         if (!serverMode) { ImGui::Columns(count, id, border); return; }
         if (rdl) {
