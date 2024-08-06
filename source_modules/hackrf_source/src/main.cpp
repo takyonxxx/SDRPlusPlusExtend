@@ -25,7 +25,7 @@ public:
         handler.tuneHandler = tune;
         handler.stream = &stream;
 
-        rtAudioSource = new RtAudiSource(stream);
+        rtAudioSource = new RtAudioSource(stream);
         refresh();
 
         config.acquire();
@@ -668,7 +668,7 @@ private:
     float modulation_index = 0;
     float interpolation = 0;
 
-    RtAudiSource *rtAudioSource;
+    RtAudioSource *rtAudioSource;
 
 #ifdef __ANDROID__
     int devFd = -1;
