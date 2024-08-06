@@ -71,7 +71,6 @@ namespace dsp {
 
         std::vector<float> readBufferToVector() {
             std::vector<float> result;
-
             if (dataSize <= 0 || readBuf == nullptr) {
                 return result;
             }

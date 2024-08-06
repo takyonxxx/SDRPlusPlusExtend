@@ -19,6 +19,7 @@ public:
           framesPerBuffer(framesPerBuffer),
           audio(),
           selectedDevice(-1),
+          inputChannels(0),
           foundMic(true),
           isRunning(false)
     {
@@ -27,7 +28,6 @@ public:
         }
 
         selectDevice();
-        setupStream();
     }
 
     ~RtAudioSource() {
@@ -87,6 +87,7 @@ private:
     unsigned int framesPerBuffer;
     RtAudio audio;
     int selectedDevice;
+    int inputChannels;
     bool foundMic;
     std::atomic<bool> isRunning;
     std::mutex mutex;
@@ -105,10 +106,13 @@ private:
                 if (!info.probed) { continue; }
 #endif
                 std::cout << info.name << " chn input: " << info.inputChannels << " chn output: " << info.outputChannels << std::endl;
-                if (info.inputChannels < 2) { continue; }
-                selectedDevice = i;
-                std::cout << "Found Mic device " << selectedDevice << std::endl;
-                break;
+                if (info.inputChannels < 1) { continue; }
+                if (info.name.find("Microphone") != std::string::npos) {
+                    selectedDevice = i;
+                    inputChannels = info.inputChannels;
+                    std::cout << "Found Mic device " << selectedDevice << std::endl;
+                    break;
+                }
             }
 #if RTAUDIO_VERSION_MAJOR >= 6
             catch (const RtAudioErrorType& e) {
@@ -126,6 +130,8 @@ private:
             foundMic = false;
             return;
         }
+
+        setupStream();
     }
 
     void setupStream() {
@@ -135,7 +141,7 @@ private:
 #endif
         RtAudio::StreamParameters parameters;
         parameters.deviceId = selectedDevice;
-        parameters.nChannels = 2;
+        parameters.nChannels = inputChannels;
         parameters.firstChannel = 0;
 
         RtAudio::StreamOptions options;

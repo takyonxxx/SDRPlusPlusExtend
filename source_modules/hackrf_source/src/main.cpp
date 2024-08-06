@@ -587,8 +587,6 @@ private:
             float_buffer[i] *= this->amplitude;
         }
 
-        //std::cerr << float_buffer.size() << std::endl;
-
         std::vector<std::complex<float>> modulated_signal(noutput_items);
         float sensitivity = modulation_index;
         FrequencyModulator modulator(sensitivity);
