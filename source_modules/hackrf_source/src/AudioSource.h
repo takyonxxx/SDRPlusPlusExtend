@@ -11,10 +11,10 @@
 
 class RtAudioSource {
 public:
-    RtAudioSource(dsp::stream<dsp::complex_t>& stream_buffer,
-                  unsigned int sampleRate = 48000,
+    RtAudioSource(dsp::stream<dsp::complex_t>& stream,
+                  unsigned int sampleRate = 44100,
                   unsigned int framesPerBuffer = 4096)
-        : stream_buffer(stream_buffer),
+        : stream(stream),
           sampleRate(sampleRate),
           framesPerBuffer(framesPerBuffer),
           audio(),
@@ -27,6 +27,7 @@ public:
         }
 
         selectDevice();
+        setupStream();
     }
 
     ~RtAudioSource() {
@@ -81,7 +82,7 @@ public:
     bool getFoundMic() const;
 
 private:
-    dsp::stream<dsp::complex_t>& stream_buffer;
+    dsp::stream<dsp::complex_t>& stream;
     unsigned int sampleRate;
     unsigned int framesPerBuffer;
     RtAudio audio;
@@ -125,8 +126,6 @@ private:
             foundMic = false;
             return;
         }
-
-        setupStream();
     }
 
     void setupStream() {
@@ -162,9 +161,9 @@ private:
                         unsigned int nBufferFrames, double streamTime,
                         RtAudioStreamStatus status, void* userData)
     {
-        RtAudioSource* source = static_cast<RtAudioSource*>(userData);
-        memcpy(source->stream_buffer.writeBuf, inputBuffer, nBufferFrames * sizeof(dsp::complex_t));
-        source->stream_buffer.swap(nBufferFrames);
+        RtAudioSource* _this = (RtAudioSource*)userData;
+        memcpy(_this->stream.writeBuf, inputBuffer, nBufferFrames * sizeof(dsp::complex_t));
+        _this->stream.swap(nBufferFrames);
         return 0;
     }
 

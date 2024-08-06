@@ -72,24 +72,14 @@ namespace dsp {
         std::vector<float> readBufferToVector() {
             std::vector<float> result;
 
-            std::unique_lock<std::mutex> lck(rdyMtx);
-            rdyCV.wait(lck, [this] { return (dataReady || readerStop); });
-
-            if (readerStop) {
-                return result;
-            }
-
             if (dataSize <= 0 || readBuf == nullptr) {
                 return result;
             }
-
-            result.reserve(dataSize * 2);
+            result.reserve(dataSize);
             for (int i = 0; i < dataSize; ++i) {
                 result.push_back(readBuf[i].re);
                 result.push_back(readBuf[i].im);
             }
-
-            dataReady = false;
             return result;
         }
 

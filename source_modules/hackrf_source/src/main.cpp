@@ -574,6 +574,7 @@ private:
 
     int apply_modulation(int8_t* buffer, uint32_t length) {
 
+        int decimation = 1;
         size_t desired_size = length / 2;
         std::vector<float> float_buffer = readStreamToSize(desired_size);
 
@@ -586,12 +587,13 @@ private:
             float_buffer[i] *= this->amplitude;
         }
 
+        //std::cerr << float_buffer.size() << std::endl;
+
         std::vector<std::complex<float>> modulated_signal(noutput_items);
         float sensitivity = modulation_index;
         FrequencyModulator modulator(sensitivity);
         modulator.work(noutput_items, float_buffer, modulated_signal);        
 
-        int decimation = 1;
         RationalResampler resampler(interpolation, decimation, filter_size);
         std::vector<std::complex<float>> resampled_signal = resampler.resample(modulated_signal);
 
