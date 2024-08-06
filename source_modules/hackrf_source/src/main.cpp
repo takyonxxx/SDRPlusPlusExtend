@@ -1,10 +1,23 @@
+#include <algorithm>
+#include <vector>
+#include <cstddef>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <sstream>
+#include <iomanip>
+#include <algorithm>
+#include <cmath>
+#include <thread>
+#include <chrono>
+#include <filesystem>
+
 #include "Constants.h"
 #include "FrequencyModulator.h"
 #include "RationalResampler.h"
 #include "AudioSource.h"
-#include <algorithm>
-#include <vector>
-#include <cstddef>
+
+namespace fs = std::filesystem;
 
 class HackRFSourceModule : public ModuleManager::Instance {
 public:
@@ -591,6 +604,8 @@ private:
     }
 
     int apply_wfm_modulation(int8_t *buffer, size_t length) {
+        const double FREQUENCY_DEVIATION = 75.0;
+        const double SINE_WAVE_FREQUENCY = 720.0;
         static double phase = 0.0;
         const double modulation_sensitivity = 2.0 * M_PI * FREQUENCY_DEVIATION / sampleRate;
         const double sine_wave_increment = 2.0 * M_PI * SINE_WAVE_FREQUENCY / sampleRate;
@@ -614,32 +629,7 @@ private:
             }
         }
         return 0;
-    }
-
-    int apply_am_modulation(int8_t *buffer, size_t length) {
-        static double carrier_phase = 0.0;
-        static double mod_phase = 0.0;
-        const double carrier_phase_increment = 2.0 * M_PI * freq / sampleRate;
-        const double mod_phase_increment = 2.0 * M_PI * SINE_WAVE_FREQUENCY / sampleRate;
-
-        for (size_t i = 0; i < length; ++i) {
-            double carrier = sin(carrier_phase);
-            double modulator = 1.0 + AM_MOD_INDEX * sin(mod_phase);
-            double sample = 127.0 * carrier * modulator;
-            if (sample > 127.0) sample = 127.0;
-            else if (sample < -127.0) sample = -127.0;
-            buffer[i] = static_cast<int8_t>(sample);
-            carrier_phase += carrier_phase_increment;
-            if (carrier_phase >= 2.0 * M_PI) {
-                carrier_phase -= 2.0 * M_PI;
-            }
-            mod_phase += mod_phase_increment;
-            if (mod_phase >= 2.0 * M_PI) {
-                mod_phase -= 2.0 * M_PI;
-            }
-        }
-        return 0;
-    }
+    }    
 
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;

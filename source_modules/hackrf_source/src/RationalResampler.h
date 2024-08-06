@@ -4,7 +4,6 @@
 #include <cmath>
 #include <complex>
 #include <stdexcept>
-#include <stdexcept>
 
 class RationalResampler {
 public:

@@ -1,6 +1,5 @@
 #ifndef FREQUENCYMODULATOR_H
 #define FREQUENCYMODULATOR_H
-#include <iostream>
 #include <vector>
 #include <cmath>
 #include <complex>

@@ -1,22 +1,6 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-#include <iostream>
-#include <string>
-#include <vector>
-#include <mutex>
-#include <fstream>
-#include <sstream>
-#include <iomanip>
-#include <algorithm>
-#include <cmath>
-#include <thread>
-#include <atomic>
-#include <chrono>
-#include <random>
-#include <condition_variable>
-#include <filesystem>
-
 #ifndef __ANDROID__
 #include <libhackrf/hackrf.h>
 #else
@@ -34,8 +18,6 @@
 #include <gui/widgets/stepped_slider.h>
 #include <gui/smgui.h>
 
-namespace fs = std::filesystem;
-
 #define _GHZ(x) ((uint64_t)(x) * 1000000000)
 #define _MHZ(x) ((x) * 1000000)
 #define _KHZ(x) ((x) * 1000)
@@ -47,12 +29,6 @@ namespace fs = std::filesystem;
 #define FM_CARRIER_FREQUENCY 100e6
 #define AM_CARRIER_FREQUENCY 1e6
 #define AUDIO_SAMPLE_RATE 44100
-
-constexpr double TWO_PI = 6.283185307179586;
-constexpr double FREQUENCY_DEVIATION = 75.0;
-constexpr double SINE_WAVE_FREQUENCY = 720.0;
-constexpr double AM_MOD_INDEX = 0.5;
-constexpr double WFM_MOD_INDEX = 5.0;
 
 #define CONCAT(a, b) ((std::string(a) + b).c_str())
 
