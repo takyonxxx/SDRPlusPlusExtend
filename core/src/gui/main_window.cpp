@@ -71,12 +71,12 @@ void MainWindow::init() {
     }
 
     gui::menu.registerEntry("Source", sourcemenu::draw, NULL);
-    gui::menu.registerEntry("Sinks", sinkmenu::draw, NULL);
-    gui::menu.registerEntry("Band Plan", bandplanmenu::draw, NULL);
     gui::menu.registerEntry("Display", displaymenu::draw, NULL);
     gui::menu.registerEntry("Theme", thememenu::draw, NULL);
-    gui::menu.registerEntry("VFO Color", vfo_color_menu::draw, NULL);
-    gui::menu.registerEntry("Module Manager", module_manager_menu::draw, NULL);
+    //gui::menu.registerEntry("Sinks", sinkmenu::draw, NULL);
+    //gui::menu.registerEntry("Band Plan", bandplanmenu::draw, NULL);
+    //gui::menu.registerEntry("VFO Color", vfo_color_menu::draw, NULL);
+    //gui::menu.registerEntry("Module Manager", module_manager_menu::draw, NULL);
 
     gui::freqSelect.init();
 
