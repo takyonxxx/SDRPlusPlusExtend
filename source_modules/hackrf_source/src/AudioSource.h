@@ -105,7 +105,7 @@ private:
                 if (!info.probed) { continue; }
 #endif
                 std::cout << info.name << " chn input: " << info.inputChannels << " chn output: " << info.outputChannels << std::endl;
-                if (info.inputChannels < 1) { continue; }
+                if (info.inputChannels < 2) { continue; }
                 selectedDevice = i;
                 std::cout << "Found Mic device " << selectedDevice << std::endl;
                 break;
