@@ -107,8 +107,14 @@ private:
                     setupStream();
                     return;
                 }
-            } catch (const RtAudioErrorType& e) {
+            }
+#if RTAUDIO_VERSION_MAJOR >= 6
+            catch (const RtAudioErrorType& e) {
                 std::cerr << "Error getting default input device info: " << audio.getErrorText() << std::endl;
+#else
+            catch (const RtAudioError& e) {
+                std::cerr << "Error getting default input device (" << i << ") info: " << e.what() << std::endl;
+#endif
             }
         }
 
