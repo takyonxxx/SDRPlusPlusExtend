@@ -1,8 +1,5 @@
 #pragma once
-#include <type_traits>
-#include <vector>
 #include <mutex>
-#include <complex>
 #include <condition_variable>
 #include <volk/volk.h>
 #include "buffer/buffer.h"
@@ -67,19 +64,6 @@ namespace dsp {
             rdyCV.notify_all();
 
             return true;
-        }
-
-        std::vector<float> readBufferToVector() {
-            std::vector<float> result;
-            if (dataSize <= 0 || readBuf == nullptr) {
-                return result;
-            }
-            result.reserve(dataSize);
-            for (int i = 0; i < dataSize; ++i) {
-                result.push_back(readBuf[i].re);
-                result.push_back(readBuf[i].im);
-            }
-            return result;
         }
 
         virtual inline int read() {

@@ -7,6 +7,21 @@ include(${SDRPP_MODULE_CMAKE})
 
 target_sources(hackrf_source
   PRIVATE
+    src/types.h
+)
+
+target_sources(hackrf_source
+  PRIVATE
+
+)
+
+target_sources(hackrf_source
+  PRIVATE
+    src/stream_tx.h
+)
+
+target_sources(hackrf_source
+  PRIVATE
     src/Constants.h
     src/FrequencyModulator.h
     src/RationalResampler.h

@@ -8,14 +8,16 @@
 #include <iomanip>
 #include <algorithm>
 #include <cmath>
-#include <thread>
-#include <chrono>
 #include <filesystem>
+
+#include <chrono>
+#include <thread>
 
 #include "Constants.h"
 #include "FrequencyModulator.h"
 #include "RationalResampler.h"
 #include "AudioSource.h"
+#include "stream_tx.h"
 
 namespace fs = std::filesystem;
 
@@ -38,7 +40,7 @@ public:
         handler.tuneHandler = tune;
         handler.stream = &stream;
 
-        rtAudioSource = new RtAudioSource(stream);
+        rtAudioSource = new RtAudioSource(stream_tx);
         refresh();
 
         config.acquire();
@@ -253,7 +255,6 @@ private:
 
     static void start(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
-
         if (_this->rx_running) { return; }
 
         if (_this->selectedSerial == "") {
@@ -261,23 +262,64 @@ private:
             return;
         }
 
-        hackrf_error err = (hackrf_error)hackrf_open_by_serial(_this->selectedSerial.c_str(), &_this->openDev);
-        if (err != HACKRF_SUCCESS) {
-            flog::error("Could not open HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
-            return;
+        const int INITIAL_WAIT_MS = 100;
+        int retry_count = 0;
+        hackrf_error err;
+
+        if (!_this->openDev)
+        {
+            while (err == HACKRF_SUCCESS) {
+                err = (hackrf_error)hackrf_open_by_serial(_this->selectedSerial.c_str(), &_this->openDev);
+                int wait_time = INITIAL_WAIT_MS * (1 << retry_count);
+                flog::info("HackRF {0} is busy. Retrying in {1} ms...", _this->selectedSerial, wait_time);
+                std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));
+                retry_count++;
+            }
         }
 
         _this->amp = false;
         _this->biasT = false;
 
-        hackrf_set_sample_rate(_this->openDev, _this->sampleRate);
-        hackrf_set_baseband_filter_bandwidth(_this->openDev, _this->bandwidthIdToBw(_this->bwId));
-        hackrf_set_freq(_this->openDev, _this->freq);
-        hackrf_set_antenna_enable(_this->openDev, _this->biasT);
-        hackrf_set_amp_enable(_this->openDev, _this->amp);
-        hackrf_set_lna_gain(_this->openDev, _this->lna);
-        hackrf_set_vga_gain(_this->openDev, _this->vga);
-        hackrf_start_rx(_this->openDev, callback_rx, _this);
+        int result = hackrf_set_sample_rate(_this->openDev, _this->sampleRate);
+        if (result != HACKRF_SUCCESS) {
+            flog::error("Failed to set sample rate: {0}", hackrf_error_name((hackrf_error)result));
+        }
+
+        result = hackrf_set_baseband_filter_bandwidth(_this->openDev, _this->bandwidthIdToBw(_this->bwId));
+        if (result != HACKRF_SUCCESS) {
+            flog::error("Failed to set bandwidth: {0}", hackrf_error_name((hackrf_error)result));
+        }
+
+        result = hackrf_set_freq(_this->openDev, _this->freq);
+        if (result != HACKRF_SUCCESS) {
+            flog::error("Failed to set frequency: {0}", hackrf_error_name((hackrf_error)result));
+        }
+
+        result = hackrf_set_antenna_enable(_this->openDev, _this->biasT);
+        if (result != HACKRF_SUCCESS) {
+            flog::error("Failed to set antenna: {0}", hackrf_error_name((hackrf_error)result));
+        }
+
+        result = hackrf_set_amp_enable(_this->openDev, _this->amp);
+        if (result != HACKRF_SUCCESS) {
+            flog::error("Failed to set amp: {0}", hackrf_error_name((hackrf_error)result));
+        }
+
+        result = hackrf_set_lna_gain(_this->openDev, _this->lna);
+        if (result != HACKRF_SUCCESS) {
+            flog::error("Failed to set LNA gain: {0}", hackrf_error_name((hackrf_error)result));
+        }
+
+        result = hackrf_set_vga_gain(_this->openDev, _this->vga);
+        if (result != HACKRF_SUCCESS) {
+            flog::error("Failed to set VGA gain: {0}", hackrf_error_name((hackrf_error)result));
+        }
+
+        result = hackrf_start_rx(_this->openDev, callback_rx, _this);
+        if (result != HACKRF_SUCCESS) {
+            flog::error("Failed to start Rx: {0}", hackrf_error_name((hackrf_error)result));
+            return;
+        }
 
         _this->rx_running = true;
         flog::info("HackRFSourceModule '{0}': Started Rx Mode!", _this->name);
@@ -285,48 +327,38 @@ private:
 
     static void stop(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
-        hackrf_error err;
-
         if (!_this->rx_running) { return; }
-        _this->stream.stopWriter();
         hackrf_stop_rx(_this->openDev);
-
-        err = (hackrf_error)hackrf_close(_this->openDev);
-        if (err != HACKRF_SUCCESS) {
-            flog::error("Could not close HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
-        }
-
-        _this->stream.clearWriteStop();
         _this->rx_running = false;
-
         flog::info("HackRFSourceModule '{0}': Stopped Rx Mode!", _this->name);
     }
 
     static void start_ptt(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
-        if (_this->rx_running)
-            _this->stop(ctx);
-
         if (_this->selectedSerial == "") {
             flog::error("Tried to start HackRF source with empty serial");
             _this->ptt = false;
             return;
         }
 
-        hackrf_error err = (hackrf_error)hackrf_open_by_serial(_this->selectedSerial.c_str(), &_this->openDev);
-        if (err != HACKRF_SUCCESS) {
-            flog::error("Could not open HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
-            _this->ptt = false;
-            return;
+        _this->stop(ctx);
+
+        if (!_this->openDev) {
+            hackrf_error err = (hackrf_error)hackrf_open_by_serial(_this->selectedSerial.c_str(), &_this->openDev);
+            if (err != HACKRF_SUCCESS) {
+                flog::error("Could not open HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
+                _this->ptt = false;
+                return;
+            }
         }
 
-        _this->biasT = true;
         _this->amp = true;
         _this->startRecording();
-
         _this->srId = 6;
         _this->sampleRate = sampleRates[_this->srId];
         core::setInputSampleRate(_this->sampleRate);
+
+        // Consider if this config update is necessary every time
         config.acquire();
         config.conf["devices"][_this->selectedSerial]["sampleRate"] = _this->sampleRate;
         config.release(true);
@@ -339,7 +371,8 @@ private:
         hackrf_set_lna_gain(_this->openDev, _this->lna);
         hackrf_set_vga_gain(_this->openDev, _this->vga);
         hackrf_set_txvga_gain(_this->openDev, _this->tx_vga);
-        hackrf_set_baseband_filter_bandwidth(_this->openDev,  _this->sampleRate*0.75);
+        hackrf_set_baseband_filter_bandwidth(_this->openDev, _this->sampleRate * 0.75);
+
         hackrf_start_tx(_this->openDev, callback_tx, _this);
         _this->tx_running = true;
         flog::info("HackRFSourceModule '{0} {1}': Start Tx Mode!", _this->name, _this->ptt);
@@ -347,30 +380,20 @@ private:
 
     static void stop_ptt(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
-        hackrf_error err;
         _this->stopRecording();
+        hackrf_stop_tx(_this->openDev);
+        flog::info("HackRFSourceModule '{0}': Stop Tx Mode!", _this->name);
 
-        hackrf_stop_tx(_this->openDev);        
-
-        err = (hackrf_error)hackrf_reset(_this->openDev);
+        hackrf_error err = (hackrf_error)hackrf_reset(_this->openDev);
         if (err != HACKRF_SUCCESS) {
             flog::error("Could not reset HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
         }
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(std::chrono::seconds(2));
         flog::info("HackRF {0} has been hard reset", _this->selectedSerial);
-
-        // err = (hackrf_error)hackrf_close(_this->openDev);
-        // if (err != HACKRF_SUCCESS) {
-        //     flog::error("Could not close HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
-        // }
-
-        _this->stream.stopWriter();
-        _this->stream.clearWriteStop();
+        _this->openDev = nullptr;
         _this->tx_running = false;
         _this->ptt = false;
         _this->start(ctx);
-
-        flog::info("HackRFSourceModule '{0}': Stop Tx Mode!", _this->name);
     }
 
     static void tune(double freq, void* ctx) {
@@ -552,26 +575,20 @@ private:
 
     static int callback_rx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->rx_ctx;
-        if (!_this->rx_running) { return 0; }
         volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
-        if (!_this->stream.swap(transfer->valid_length / 2)) { return -1; }
-        return 0;
-    }
-
-    std::vector<float> convertToFloatVector(const std::vector<dsp::complex_t>& complexBuf) {
-        std::vector<float> floatBuf(2 * complexBuf.size()); // Allocate vector with double size
-        for (size_t i = 0; i < complexBuf.size(); ++i) {
-            floatBuf[2 * i]     = complexBuf[i].re;      // Real part
-            floatBuf[2 * i + 1] = complexBuf[i].im;      // Imaginary part
+        if (!_this->stream.swap(transfer->valid_length / 2))
+        {
+            std::cout << "callback_rx swap error" << std::endl;
+            return -1;
         }
-        return floatBuf;
+        return 0;
     }
 
     std::vector<float> readStreamToSize(size_t size) {
         std::vector<float> float_buffer;
         float_buffer.reserve(size);
         while (float_buffer.size() < size) {           
-            std::vector<float> temp_buffer = stream.readBufferToVector();
+            std::vector<float> temp_buffer = stream_tx.readBufferToVector();
             size_t elements_needed = size - float_buffer.size();
             size_t elements_to_add = (elements_needed < temp_buffer.size()) ? elements_needed : temp_buffer.size();
             float_buffer.insert(float_buffer.end(), temp_buffer.begin(), temp_buffer.begin() + elements_to_add);
@@ -649,6 +666,7 @@ private:
     hackrf_device* openDev;
     bool enabled = true;
     dsp::stream<dsp::complex_t> stream;
+    dsp::stream_tx<dsp::complex_tx> stream_tx;
     int sampleRate;
     SourceManager::SourceHandler handler;
     bool rx_running = false;

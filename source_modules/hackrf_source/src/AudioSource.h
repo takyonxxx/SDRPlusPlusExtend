@@ -5,16 +5,18 @@
 #include <iostream>
 #include <stdexcept>
 #include <RtAudio.h>
-#include <signal_path/signal_path.h>
+#include <string.h>
+#include "types.h"
+#include "stream_tx.h"
 #include <atomic>
 #include <mutex>
 
 class RtAudioSource {
 public:
-    RtAudioSource(dsp::stream<dsp::complex_t>& stream,
+    RtAudioSource(dsp::stream_tx<dsp::complex_tx>& stream_tx,
                   unsigned int sampleRate = 48000,
                   unsigned int framesPerBuffer = 4096)
-        : stream(stream),
+        : stream_tx(stream_tx),
           sampleRate(sampleRate),
           framesPerBuffer(framesPerBuffer),
           audio(),
@@ -82,7 +84,7 @@ public:
     bool getFoundMic() const;
 
 private:
-    dsp::stream<dsp::complex_t>& stream;
+    dsp::stream_tx<dsp::complex_tx>& stream_tx;
     unsigned int sampleRate;
     unsigned int framesPerBuffer;
     RtAudio audio;
@@ -190,8 +192,8 @@ private:
                         RtAudioStreamStatus status, void* userData)
     {
         RtAudioSource* _this = (RtAudioSource*)userData;
-        memcpy(_this->stream.writeBuf, inputBuffer, nBufferFrames * sizeof(dsp::complex_t));
-        _this->stream.swap(nBufferFrames);
+        memcpy(_this->stream_tx.writeBuf, inputBuffer, nBufferFrames * sizeof(dsp::complex_tx));
+        _this->stream_tx.swap(nBufferFrames);
         return 0;
     }
 
