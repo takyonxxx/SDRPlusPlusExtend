@@ -113,7 +113,7 @@ private:
                 std::cerr << "Error getting default input device info: " << audio.getErrorText() << std::endl;
 #else
             catch (const RtAudioError& e) {
-                std::cerr << "Error getting default input device (" << i << ") info: " << e.what() << std::endl;
+                std::cerr << "Error getting default input device info: " << e.what() << std::endl;
 #endif
             }
         }
