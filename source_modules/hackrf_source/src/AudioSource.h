@@ -12,7 +12,7 @@
 class RtAudioSource {
 public:
     RtAudioSource(dsp::stream<dsp::complex_t>& stream,
-                  unsigned int sampleRate = 44100,
+                  unsigned int sampleRate = 48000,
                   unsigned int framesPerBuffer = 4096)
         : stream(stream),
           sampleRate(sampleRate),
