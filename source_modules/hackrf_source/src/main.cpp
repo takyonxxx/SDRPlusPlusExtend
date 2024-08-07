@@ -324,6 +324,13 @@ private:
         _this->amp = true;
         _this->startRecording();
 
+        _this->srId = 6;
+        _this->sampleRate = sampleRates[_this->srId];
+        core::setInputSampleRate(_this->sampleRate);
+        config.acquire();
+        config.conf["devices"][_this->selectedSerial]["sampleRate"] = _this->sampleRate;
+        config.release(true);
+
         hackrf_set_sample_rate(_this->openDev, _this->sampleRate);
         hackrf_set_baseband_filter_bandwidth(_this->openDev, _this->bandwidthIdToBw(_this->bwId));
         hackrf_set_freq(_this->openDev, _this->freq);
@@ -352,10 +359,10 @@ private:
         std::this_thread::sleep_for(std::chrono::seconds(1));
         flog::info("HackRF {0} has been hard reset", _this->selectedSerial);
 
-        err = (hackrf_error)hackrf_close(_this->openDev);
-        if (err != HACKRF_SUCCESS) {
-            flog::error("Could not close HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
-        }
+        // err = (hackrf_error)hackrf_close(_this->openDev);
+        // if (err != HACKRF_SUCCESS) {
+        //     flog::error("Could not close HackRF {0}: {1}", _this->selectedSerial, hackrf_error_name(err));
+        // }
 
         _this->stream.stopWriter();
         _this->stream.clearWriteStop();

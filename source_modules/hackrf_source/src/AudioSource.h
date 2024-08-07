@@ -94,6 +94,25 @@ private:
 
     void selectDevice() {
         RtAudio::DeviceInfo info;
+        int defaultInputDevice = audio.getDefaultInputDevice();
+
+               // First, try to use the default input device
+        if (defaultInputDevice != 0) {
+            try {
+                info = audio.getDeviceInfo(defaultInputDevice);
+                if (info.inputChannels > 0) {
+                    selectedDevice = defaultInputDevice;
+                    inputChannels = info.inputChannels;
+                    std::cout << "Using default input device: " << info.name << " (ID: " << selectedDevice << ")" << std::endl;
+                    setupStream();
+                    return;
+                }
+            } catch (const RtAudioErrorType& e) {
+                std::cerr << "Error getting default input device info: " << audio.getErrorText() << std::endl;
+            }
+        }
+
+       // If default device is not suitable, fall back to searching for a suitable device
 #if RTAUDIO_VERSION_MAJOR >= 6
         for (int i : audio.getDeviceIds()) {
 #else
@@ -107,12 +126,10 @@ private:
 #endif
                 std::cout << info.name << " chn input: " << info.inputChannels << " chn output: " << info.outputChannels << std::endl;
                 if (info.inputChannels < 1) { continue; }
-                if (info.name.find("Microphone") != std::string::npos) {
-                    selectedDevice = i;
-                    inputChannels = info.inputChannels;
-                    std::cout << "Found Mic device " << selectedDevice << std::endl;
-                    break;
-                }
+                selectedDevice = i;
+                inputChannels = info.inputChannels;
+                std::cout << "Found Mic device " << selectedDevice << std::endl;
+                break;
             }
 #if RTAUDIO_VERSION_MAJOR >= 6
             catch (const RtAudioErrorType& e) {
@@ -130,7 +147,6 @@ private:
             foundMic = false;
             return;
         }
-
         setupStream();
     }
 
