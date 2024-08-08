@@ -165,9 +165,9 @@ public:
             config.conf["devices"][serial]["vgaGain"] = 40;
             config.conf["devices"][serial]["txVgaGain"] = 47;
             config.conf["devices"][serial]["bandwidth"] = 16;
-            config.conf["devices"][serial]["amplitude"] = 3.5;
-            config.conf["devices"][serial]["filter_size"] = 0.0;
-            config.conf["devices"][serial]["modulation_index"] = 9.0;
+            config.conf["devices"][serial]["amplitude"] = 1.0;
+            config.conf["devices"][serial]["filter_size"] = 0.4;
+            config.conf["devices"][serial]["modulation_index"] = 7.5;
             config.conf["devices"][serial]["interpolation"] = 48;
         }
         config.release(created);
@@ -179,9 +179,9 @@ public:
         lna = 0;
         vga = 0;
         tx_vga = 0;
-        amplitude = 3.5;
-        filter_size = 0.0;
-        modulation_index = 9.0;
+        amplitude = 1.0;
+        filter_size = 0.4;
+        modulation_index = 7.5;
         interpolation = 48;
         bwId = 1;
 
