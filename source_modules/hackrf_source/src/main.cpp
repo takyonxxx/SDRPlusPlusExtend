@@ -519,12 +519,12 @@ private:
             flog::error("Error stopping HackRF: {}", hackrf_error_name(err));
         }
 
-        err = (hackrf_error)hackrf_reset(_this->openDev);
-        if (err != HACKRF_SUCCESS) {
-            flog::error("Error resetting HackRF: {}", hackrf_error_name(err));
-        } else {
-            flog::info("HackRF reset successfully");
-        }
+        // err = (hackrf_error)hackrf_reset(_this->openDev);
+        // if (err != HACKRF_SUCCESS) {
+        //     flog::error("Error resetting HackRF: {}", hackrf_error_name(err));
+        // } else {
+        //     flog::info("HackRF reset successfully");
+        // }
 
         err = (hackrf_error)hackrf_close(_this->openDev);
         if (err != HACKRF_SUCCESS) {
