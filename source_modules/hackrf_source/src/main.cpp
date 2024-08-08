@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
-
 #include <chrono>
 #include <thread>
 
@@ -169,7 +168,7 @@ public:
             config.conf["devices"][serial]["amplitude"] = 3.5;
             config.conf["devices"][serial]["filter_size"] = 0.0;
             config.conf["devices"][serial]["modulation_index"] = 9.0;
-            config.conf["devices"][serial]["interpolation"] = 44;
+            config.conf["devices"][serial]["interpolation"] = 48;
         }
         config.release(created);
 
@@ -183,7 +182,7 @@ public:
         amplitude = 3.5;
         filter_size = 0.0;
         modulation_index = 9.0;
-        interpolation = 44;
+        interpolation = 48;
         bwId = 1;
 
                // Load config values
@@ -283,7 +282,7 @@ private:
         if (err != HACKRF_SUCCESS) {
             flog::error("Failed to open HackRF {}: {}", selectedSerial, hackrf_error_name(err));
             return false;
-        }
+        }       
         return true;
     }
 
@@ -464,11 +463,12 @@ private:
 
     static void start(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
-
-        std::cout << "Trying to start. Ptt :" << _this->ptt << std::endl;
         hackrf_error err = HACKRF_ERROR_NOT_FOUND;
 
-        if (_this->running) return;
+        if (_this->running) {
+            flog::warn("Attempted to start HackRF source that is already running");
+            return;
+        }
 
         if (_this->selectedSerial.empty()) {
             flog::error("Tried to start HackRF source with empty serial");
@@ -476,75 +476,65 @@ private:
         }
 
         if (!_this->openDev) {
-            if (!_this->openDevice()) return;
+            if (!_this->openDevice()) {
+                flog::error("Failed to open HackRF device");
+                return;
+            }
         }
 
         _this->configureDevice();
 
         if (_this->ptt) {
             _this->startRecording();
-            err =  (hackrf_error)hackrf_start_tx(_this->openDev, callback_tx, _this);
+            err = (hackrf_error)hackrf_start_tx(_this->openDev, callback_tx, _this);
+            flog::info("hackrf_start_tx: {}", hackrf_error_name(err));
         } else {
-            err =  (hackrf_error)hackrf_start_rx(_this->openDev, callback_rx, _this);
+            err = (hackrf_error)hackrf_start_rx(_this->openDev, callback_rx, _this);
+            flog::info("hackrf_start_rx: {}", hackrf_error_name(err));
         }
 
         if (err != HACKRF_SUCCESS) {
-            flog::error("Failed to start {}: {}", _this->ptt ? "Tx" : "Rx", hackrf_error_name(err));
+            flog::error("Failed to start HackRF: {}", hackrf_error_name(err));
             return;
         }
 
         _this->running = true;
-        flog::info("HackRFSourceModule '{}': Started {} Mode!", _this->name, _this->ptt ? "Tx" : "Rx");
+        flog::info("HackRF started successfully");
     }
 
     static void stop(void* ctx) {
         HackRFSourceModule* _this = (HackRFSourceModule*)ctx;
-
-        std::cout << "Trying to stop. Ptt :" << _this->ptt << std::endl;
         hackrf_error err = HACKRF_ERROR_NOT_FOUND;
-
         if (!_this->running) return;
+        _this->stopRecording();
 
-        if (_this->ptt)
-        {
-            _this->stopRecording();
-            err =  (hackrf_error)hackrf_stop_tx(_this->openDev);
+        if (_this->ptt) {
+            err = (hackrf_error)hackrf_stop_tx(_this->openDev);
+            flog::info("hackrf_stop_tx: {}", hackrf_error_name(err));
+        } else {
+            err = (hackrf_error)hackrf_stop_rx(_this->openDev);
+            flog::info("hackrf_stop_rx: {}", hackrf_error_name(err));
         }
-        else
-        {
-            err =  (hackrf_error)hackrf_stop_rx(_this->openDev);
-        }
-
         if (err != HACKRF_SUCCESS) {
-            std::cout << "Error: " << hackrf_error_name(err) << std::endl;
-            return;
+            flog::error("Error stopping HackRF: {}", hackrf_error_name(err));
         }
 
-       // err =  (hackrf_error)hackrf_reset(_this->openDev);
-       // if (err != HACKRF_SUCCESS) {
-       //     flog::error("Could not reset HackRF {}: {}", _this->selectedSerial, hackrf_error_name(err));
-       // }
+        err = (hackrf_error)hackrf_reset(_this->openDev);
+        if (err != HACKRF_SUCCESS) {
+            flog::error("Error resetting HackRF: {}", hackrf_error_name(err));
+        } else {
+            flog::info("HackRF reset successfully");
+        }
 
         err = (hackrf_error)hackrf_close(_this->openDev);
         if (err != HACKRF_SUCCESS) {
-            std::cout << "Error: " << hackrf_error_name(err) << std::endl;
-            return;
+            flog::error("Error closing HackRF: {}", hackrf_error_name(err));
+        } else {
+            flog::info("HackRF closed successfully");
         }
 
-        _this->running = false;
         _this->openDev = nullptr;
-        std::cout << "HACKRF Stopped. Ptt :" << _this->ptt << std::endl;
-    }
-
-    static int callback_rx(hackrf_transfer* transfer) {
-        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->rx_ctx;
-        if (!_this->running) return 0;
-        volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
-        if (!_this->stream.swap(transfer->valid_length / 2))
-        {
-            return -1;
-        }
-        return 0;
+        _this->running = false;
     }
 
     std::vector<float> readStreamToSize(size_t size) {
@@ -552,8 +542,6 @@ private:
         float_buffer.reserve(size);
         while (float_buffer.size() < size) {
             std::vector<float> temp_buffer = stream_tx.readBufferToVector();
-            if(temp_buffer.size() == 0)
-                break;
             size_t elements_needed = size - float_buffer.size();
             size_t elements_to_add = (elements_needed < temp_buffer.size()) ? elements_needed : temp_buffer.size();
             float_buffer.insert(float_buffer.end(), temp_buffer.begin(), temp_buffer.begin() + elements_to_add);
@@ -620,10 +608,20 @@ private:
         return 0;
     }
 
+    static int callback_rx(hackrf_transfer* transfer) {
+        HackRFSourceModule* _this = (HackRFSourceModule*)transfer->rx_ctx;
+        if (!_this->running) return 0;
+        volk_8i_s32f_convert_32f((float*)_this->stream.writeBuf, (int8_t*)transfer->buffer, 128.0f, transfer->valid_length);
+        if (!_this->stream.swap(transfer->valid_length / 2))
+        {
+            return -1;
+        }
+        return 0;
+    }
+
     static int callback_tx(hackrf_transfer* transfer) {
         HackRFSourceModule* _this = (HackRFSourceModule*)transfer->tx_ctx;
-        //return _this->apply_modulation((int8_t *)transfer->buffer, transfer->valid_length);
-        return 0;
+        return _this->apply_modulation((int8_t *)transfer->buffer, transfer->valid_length);
     }
 
     std::string name;

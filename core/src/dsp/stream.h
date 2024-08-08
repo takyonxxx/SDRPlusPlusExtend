@@ -1,4 +1,5 @@
 #pragma once
+#include <string.h>
 #include <mutex>
 #include <condition_variable>
 #include <volk/volk.h>
@@ -30,7 +31,7 @@ namespace dsp {
 
         virtual ~stream() {
             free();
-        }        
+        }
 
         virtual void setBufferSize(int samples) {
             buffer::free(writeBuf);
@@ -45,10 +46,10 @@ namespace dsp {
                 std::unique_lock<std::mutex> lck(swapMtx);
                 swapCV.wait(lck, [this] { return (canSwap || writerStop); });
 
-                // If writer was stopped, abandon operation
+                       // If writer was stopped, abandon operation
                 if (writerStop) { return false; }
 
-                // Swap buffers
+                       // Swap buffers
                 dataSize = size;
                 T* temp = writeBuf;
                 writeBuf = readBuf;
@@ -56,7 +57,7 @@ namespace dsp {
                 canSwap = false;
             }
 
-            // Notify reader that some data is ready
+                   // Notify reader that some data is ready
             {
                 std::lock_guard<std::mutex> lck(rdyMtx);
                 dataReady = true;
@@ -81,7 +82,7 @@ namespace dsp {
                 dataReady = false;
             }
 
-            // Notify writer that buffers can be swapped
+                   // Notify writer that buffers can be swapped
             {
                 std::lock_guard<std::mutex> lck(swapMtx);
                 canSwap = true;
@@ -117,14 +118,14 @@ namespace dsp {
         void free() {
             if (writeBuf) { buffer::free(writeBuf); }
             if (readBuf) { buffer::free(readBuf); }
-            writeBuf = nullptr;
-            readBuf = nullptr;
+            writeBuf = NULL;
+            readBuf = NULL;
         }
 
-        T* writeBuf = nullptr;
-        T* readBuf = nullptr;
+        T* writeBuf;
+        T* readBuf;
 
-    public:
+    private:
         std::mutex swapMtx;
         std::condition_variable swapCV;
         bool canSwap = true;

@@ -1,20 +1,22 @@
 #ifndef STREAM_TX_H
 #define STREAM_TX_H
 #pragma once
+
 #include <vector>
 #include <mutex>
 #include <condition_variable>
 #include <volk/volk.h>
+#include <atomic>
 
 namespace dsp::buffer {
     template<class T>
     inline T* alloc_tx(int count) {
-        return (T*)volk_malloc(count * sizeof(T), volk_get_alignment());
+        return static_cast<T*>(volk_malloc(count * sizeof(T), volk_get_alignment()));
     }
 
     template<class T>
     inline void clear_tx(T* buffer, int count, int offset = 0) {
-        memset(&buffer[offset], 0, count * sizeof(T));
+        std::memset(&buffer[offset], 0, count * sizeof(T));
     }
 
     inline void free_tx(void* buffer) {
@@ -30,49 +32,49 @@ namespace dsp {
     public:
         virtual ~untyped_stream_tx() {}
         virtual bool swap(int size) { return false; }
-        virtual void flush() {}       
+        virtual void flush() {}
     };
 
     template <class T>
     class stream_tx : public untyped_stream_tx {
     public:
-        stream_tx() {
-            writeBuf = buffer::alloc_tx<T>(STREAM_BUFFER_SIZE);
-            readBuf = buffer::alloc_tx<T>(STREAM_BUFFER_SIZE);
-        }
+        stream_tx() : writeBuf(buffer::alloc_tx<T>(STREAM_BUFFER_SIZE)),
+                      readBuf(buffer::alloc_tx<T>(STREAM_BUFFER_SIZE)) {}
 
         virtual ~stream_tx() {
             free();
         }
 
+        stream_tx(const stream_tx&) = delete;
+        stream_tx& operator=(const stream_tx&) = delete;
+
         virtual void setBufferSize(int samples) {
+            std::lock_guard<std::mutex> lock(bufferMutex);
             buffer::free_tx(writeBuf);
             buffer::free_tx(readBuf);
             writeBuf = buffer::alloc_tx<T>(samples);
             readBuf = buffer::alloc_tx<T>(samples);
         }
 
-        virtual inline bool swap(int size) {
-
-            std::unique_lock<std::mutex> lck(rdyMtx);
-            dataSize = size;
-            T* temp = writeBuf;
-            writeBuf = readBuf;
-            readBuf = temp;
-            canSwap = false;
+        virtual bool swap(int size) override {
+            std::lock_guard<std::mutex> lock(bufferMutex);
+            dataSize.store(size);
+            std::swap(writeBuf, readBuf);
+            canSwap.store(false);
             return true;
         }
 
         std::vector<float> readBufferToVector() {
             std::vector<float> result;
-            std::unique_lock<std::mutex> lck(rdyMtx);
+            int currentSize = dataSize.load();
 
-            if (dataSize <= 0 || readBuf == nullptr) {
+            std::lock_guard<std::mutex> lock(bufferMutex);
+            if (currentSize <= 0 || readBuf == nullptr) {
                 return result;
             }
 
-            result.reserve(dataSize * 2);
-            for (int i = 0; i < dataSize; ++i) {
+            result.reserve(currentSize * 2);
+            for (int i = 0; i < currentSize; ++i) {
                 result.push_back(readBuf[i].re);
                 result.push_back(readBuf[i].im);
             }
@@ -80,28 +82,22 @@ namespace dsp {
         }
 
         void free() {
-            if (writeBuf) { buffer::free_tx(writeBuf); }
-            if (readBuf) { buffer::free_tx(readBuf); }
-            writeBuf = nullptr;
-            readBuf = nullptr;
+            std::lock_guard<std::mutex> lock(bufferMutex);
+            if (writeBuf) { buffer::free_tx(writeBuf); writeBuf = nullptr; }
+            if (readBuf) { buffer::free_tx(readBuf); readBuf = nullptr; }
         }
 
-        T* writeBuf = nullptr;
-        T* readBuf = nullptr;
-
     public:
-        std::mutex swapMtx;
+        T* writeBuf;
+        T* readBuf;
+        std::mutex bufferMutex;
+        std::atomic<int> dataSize{0};
+        std::atomic<bool> canSwap{true};
+        std::atomic<bool> dataReady{false};
+        std::atomic<bool> readerStop{false};
+        std::atomic<bool> writerStop{false};
         std::condition_variable swapCV;
-        bool canSwap = true;
-
-        std::mutex rdyMtx;
         std::condition_variable rdyCV;
-        bool dataReady = false;
-
-        bool readerStop = false;
-        bool writerStop = false;
-
-        int dataSize = 0;
     };
 }
 

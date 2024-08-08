@@ -189,7 +189,7 @@ private:
     {
         RtAudioSource* _this = (RtAudioSource*)userData;
         memcpy(_this->stream_tx.writeBuf, inputBuffer, nBufferFrames * sizeof(dsp::complex_tx));
-        _this->stream_tx.swap(nBufferFrames);
+        _this->stream_tx.swap(nBufferFrames);       
         return 0;
     }
 
