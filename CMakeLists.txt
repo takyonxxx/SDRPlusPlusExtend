@@ -85,7 +85,6 @@ if (OPT_BUILD_RTL_SDR_SOURCE)
 add_subdirectory("source_modules/rtl_sdr_source")
 endif (OPT_BUILD_RTL_SDR_SOURCE)
 
-
 # Sink modules
 if (OPT_BUILD_AUDIO_SINK)
 add_subdirectory("sink_modules/audio_sink")

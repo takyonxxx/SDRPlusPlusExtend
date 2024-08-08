@@ -30,12 +30,7 @@ namespace dsp {
     public:
         virtual ~untyped_stream_tx() {}
         virtual bool swap(int size) { return false; }
-        virtual int read() { return -1; }
-        virtual void flush() {}
-        virtual void stopWriter() {}
-        virtual void clearWriteStop() {}
-        virtual void stopReader() {}
-        virtual void clearReadStop() {}
+        virtual void flush() {}       
     };
 
     template <class T>

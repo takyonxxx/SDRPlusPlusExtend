@@ -235,7 +235,7 @@ int sdrpp_main(int argc, char* argv[]) {
     core::configManager.conf["modules"] = json::array();
 
     core::configManager.conf["modules"][modCount++] = "hackrf_source.so";    
-    core::configManager.conf["modules"][modCount++] = "rtl_sdr_source.so";    
+    core::configManager.conf["modules"][modCount++] = "rtl_sdr_source.so";
     core::configManager.conf["modules"][modCount++] = "audio_sink.so";
     core::configManager.conf["modules"][modCount++] = "radio.so";
     core::configManager.conf["modules"][modCount++] = "recorder.so";

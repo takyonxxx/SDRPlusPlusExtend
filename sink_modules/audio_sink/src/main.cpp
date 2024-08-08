@@ -225,7 +225,7 @@ private:
         if (count < 0) { return 0; }
 
         memcpy(outputBuffer, _this->stereoPacker.out.readBuf, nBufferFrames * sizeof(dsp::stereo_t));
-        _this->stereoPacker.out.flush();
+        _this->stereoPacker.out.flush();        
         return 0;
     }
 

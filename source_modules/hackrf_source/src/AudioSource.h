@@ -14,15 +14,15 @@
 class RtAudioSource {
 public:
     RtAudioSource(dsp::stream_tx<dsp::complex_tx>& stream_tx,
-                  unsigned int sampleRate = 48000,
+                  unsigned int sampleRate = 44100,
                   unsigned int framesPerBuffer = 4096)
-        : stream_tx(stream_tx),
+        :
+          stream_tx(stream_tx),
           sampleRate(sampleRate),
           framesPerBuffer(framesPerBuffer),
           audio(),
           selectedDevice(-1),
           inputChannels(0),
-          foundMic(true),
           isRunning(false)
     {
         if (audio.getDeviceCount() < 1) {
@@ -30,6 +30,7 @@ public:
         }
 
         selectDevice();
+        setupStream();
     }
 
     ~RtAudioSource() {
@@ -41,10 +42,11 @@ public:
 
     bool start() {
         std::lock_guard<std::mutex> lock(mutex);
-        if (!isRunning && foundMic) {
+        if (!isRunning) {
             try {
                 audio.startStream();
                 isRunning = true;
+                std::cout << "Audio Input Stream Started "  << std::endl;
                 return true;
             }
 #if RTAUDIO_VERSION_MAJOR >= 6
@@ -62,10 +64,11 @@ public:
 
     bool stop() {
         std::lock_guard<std::mutex> lock(mutex);
-        if (isRunning && foundMic) {
+        if (isRunning) {
             try {
                 audio.stopStream();
                 isRunning = false;
+                std::cout << "Audio Input Stream Stopped "  << std::endl;
                 return true;
             }
 #if RTAUDIO_VERSION_MAJOR >= 6
@@ -81,7 +84,8 @@ public:
         return true;
     }
 
-    bool getFoundMic() const;
+    bool getIsRunning() const { return isRunning; }
+
 
 private:
     dsp::stream_tx<dsp::complex_tx>& stream_tx;
@@ -90,7 +94,6 @@ private:
     RtAudio audio;
     int selectedDevice;
     int inputChannels;
-    bool foundMic;
     std::atomic<bool> isRunning;
     std::mutex mutex;
 
@@ -106,7 +109,6 @@ private:
                     selectedDevice = defaultInputDevice;
                     inputChannels = info.inputChannels;
                     std::cout << "Using default input device: " << info.name << " (ID: " << selectedDevice << ")" << std::endl;
-                    setupStream();
                     return;
                 }
             }
@@ -132,12 +134,12 @@ private:
 #if !defined(RTAUDIO_VERSION_MAJOR) || RTAUDIO_VERSION_MAJOR < 6
                 if (!info.probed) { continue; }
 #endif
-                std::cout << info.name << " chn input: " << info.inputChannels << " chn output: " << info.outputChannels << std::endl;
+                std::cout << info.name << " input channels: " << info.inputChannels << std::endl;
                 if (info.inputChannels < 1) { continue; }
                 selectedDevice = i;
                 inputChannels = info.inputChannels;
-                std::cout << "Found Mic device " << selectedDevice << std::endl;
-                break;
+                std::cout << "Found input device " << selectedDevice << std::endl;
+                return;
             }
 #if RTAUDIO_VERSION_MAJOR >= 6
             catch (const RtAudioErrorType& e) {
@@ -149,17 +151,10 @@ private:
             }
         }
 
-        if(selectedDevice == -1)
-        {
-            std::cerr << "No suitable mic device found" << std::endl;
-            foundMic = false;
-            return;
-        }
-        setupStream();
+        std::cerr << "No suitable input device found" << std::endl;
     }
 
     void setupStream() {
-
 #if RTAUDIO_VERSION_MAJOR >= 6
         audio.setErrorCallback(&RtAudioSource::errorCallback);
 #endif
@@ -176,11 +171,12 @@ private:
             audio.openStream(nullptr, &parameters, RTAUDIO_FLOAT32,
                              sampleRate, &framesPerBuffer,
                              &RtAudioSource::callback, this, &options);
+        }
 #if RTAUDIO_VERSION_MAJOR >= 6
-        } catch (const RtAudioErrorType& error) {
+        catch (const RtAudioErrorType& error) {
             std::cerr << "Error opening stream: " << audio.getErrorText() << std::endl;
 #else
-            } catch (const RtAudioError& error) {
+        catch (const RtAudioError& error) {
             std::cerr << "Error opening stream: " << error.what() << std::endl;
 #endif
             return;
@@ -204,8 +200,4 @@ private:
 #endif
 };
 
-inline bool RtAudioSource::getFoundMic() const
-{
-    return foundMic;
-}
 #endif // AUDIOSOURCE_H
