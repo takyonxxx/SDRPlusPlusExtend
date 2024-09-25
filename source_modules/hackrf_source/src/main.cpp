@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <chrono>
 #include <thread>
+#include <chrono>
 
 #include "Constants.h"
 #include "FrequencyModulator.h"
@@ -519,12 +520,20 @@ private:
             flog::error("Error stopping HackRF: {}", hackrf_error_name(err));
         }
 
+        while(hackrf_is_streaming(_this->openDev) == HACKRF_TRUE)
+        {
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+
 #ifdef _WIN32
-        err = (hackrf_error)hackrf_reset(_this->openDev);
-        if (err != HACKRF_SUCCESS) {
-            flog::error("Error resetting HackRF: {}", hackrf_error_name(err));
-        } else {
-            flog::info("HackRF reset successfully");
+         if (_this->ptt)
+        {
+            err = (hackrf_error)hackrf_reset(_this->openDev);
+            if (err != HACKRF_SUCCESS) {
+                flog::error("Error resetting HackRF: {}", hackrf_error_name(err));
+            } else {
+                flog::info("HackRF reset successfully");
+            }
         }
 #endif
         err = (hackrf_error)hackrf_close(_this->openDev);
